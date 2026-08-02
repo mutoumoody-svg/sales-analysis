@@ -1,0 +1,69 @@
+# ============================================
+# AI Business Decision Platform - .gitignore
+# ============================================
+
+# Python
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.envrc
+
+# Database
+*.sqlite3
+*.sqlite3-journal
+*.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend build
+frontend/dist/
+frontend/build/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# Temporary
+tmp/
+temp/
+
+# Excel temp files
+~$*
+
+# WorkBuddy internal
+.workbuddy/
+
+# Vite cache
+frontend/node_modules/.vite/
