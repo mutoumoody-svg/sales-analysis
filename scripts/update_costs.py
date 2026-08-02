@@ -5,6 +5,7 @@ Updates: products.unit_cost (new column), order_items, sales_summary, orders.
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
+import os
 import pandas as pd
 import psycopg2
 from decimal import Decimal
@@ -57,7 +58,7 @@ print("=" * 60)
 conn = psycopg2.connect(
     host='localhost', port=5432,
     dbname='sales_analysis', user='postgres',
-    password='Maoxitrading123'
+    password=os.environ.get('DB_PASSWORD', 'YOUR_PASSWORD')
 )
 cur = conn.cursor()
 
