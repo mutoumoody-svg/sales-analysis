@@ -3,6 +3,7 @@ Inventory routes - 库存分析接口.
 包含：库存健康、周转分析、滞销分析、补货建议、资金占用.
 Dashboard: 企业健康指数 + CEO日报.
 支持按月份筛选（month 参数，格式 YYYY-MM，用于 sales_summary 数据过滤）。
+补货建议使用 reorder_service 统一引擎（近6个月加权日均 + 2个月采购周期 + 动态安全系数）。
 """
 
 from fastapi import APIRouter, Depends, Query
@@ -17,11 +18,66 @@ from app.models.product import Product
 from app.models.sales_summary import SalesSummary
 from app.models.order import Order, OrderItem
 from app.utils.period import resolve_period, period_to_date_range, get_latest_period
+from app.services.reorder_service import calculate_reorder
+from app.services.wangdian_sync_service import (
+    sync_from_wangdian as _sync_from_wangdian,
+    get_wangdian_sync_status as _get_wangdian_sync_status,
+)
+from app.core.config import settings
 
 router = APIRouter()
 
-# 采购周期天数（可后续做成配置）
-PROCUREMENT_DAYS = 30
+
+# ===== 旺店通 API 库存同步 =====
+
+@router.get("/inventory/wangdian-sync-status")
+def wangdian_sync_status(db: Session = Depends(get_db)) -> Dict:
+    """查询旺店通API库存同步状态.
+
+    返回:
+        configured: 是否已配置旺店通凭证
+        within_allowed_time: 当前是否在允许调用时间段（00:00-02:00）
+        last_sync_at: 上次同步时间
+        last_synced_date: 上次同步的日期
+        last_total_from_api: 上次从API拉取的记录总数
+        last_matched: 上次匹配的SKU数
+        last_inserted/updated: 上次新增/更新记录数
+        last_warehouses: 上次同步覆盖的仓库列表
+        sales_analysis_latest_date: inventory表最新日期
+    """
+    return {"status": "success", "data": _get_wangdian_sync_status(db)}
+
+
+@router.post("/inventory/sync-from-wangdian")
+def trigger_sync_from_wangdian(db: Session = Depends(get_db)) -> Dict:
+    """触发从旺店通API同步库存到 sales-analysis.
+
+    调用旺店通 stock_query_all.php 接口拉取全量库存数据，
+    按 SKU 匹配 products 表，upsert 到 inventory 表。
+
+    注意:
+        - 正式环境只允许凌晨 00:00-02:00 调用
+        - 需要在 .env 中配置 WANGDIAN_SID / WANGDIAN_APPKEY / WANGDIAN_APPSECRET
+        - 幂等：同一日期重复同步不会产生重复记录
+    """
+    sid = settings.WANGDIAN_SID
+    appkey = settings.WANGDIAN_APPKEY
+    appsecret = settings.WANGDIAN_APPSECRET
+
+    if not sid or not appkey or not appsecret:
+        return {
+            "status": "error",
+            "message": "未配置旺店通API凭证，请在 .env 文件中设置 WANGDIAN_SID / WANGDIAN_APPKEY / WANGDIAN_APPSECRET",
+        }
+
+    result = _sync_from_wangdian(
+        db=db,
+        sid=sid,
+        appkey=appkey,
+        appsecret=appsecret,
+        sandbox=settings.WANGDIAN_SANDBOX,
+    )
+    return result
 
 
 @router.get("/inventory/health")
@@ -32,6 +88,11 @@ def inventory_health(
     db: Session = Depends(get_db),
 ) -> Dict:
     """库存健康分析: 库存评分、风险SKU."""
+    # 默认只取最新日期，避免历史快照叠加导致库存虚高
+    if not as_of_date:
+        latest_inv_date = db.query(func.max(Inventory.date)).scalar()
+    else:
+        latest_inv_date = as_of_date
     query = (
         db.query(
             Product.sku,
@@ -43,12 +104,11 @@ def inventory_health(
             func.sum(Inventory.inbound_qty).label("inbound"),
         )
         .join(Product, Inventory.product_id == Product.id)
+        .filter(Inventory.date == latest_inv_date)
     )
 
     if warehouse:
         query = query.filter(Inventory.warehouse == warehouse)
-    if as_of_date:
-        query = query.filter(Inventory.date <= as_of_date)
     if brand:
         query = query.filter(Product.brand == brand)
 
@@ -115,205 +175,25 @@ def inventory_analysis(
     db: Session = Depends(get_db),
 ) -> Dict:
     """库存深度分析: 周转天数、滞销分析、补货建议、资金占用.
-    
-    month 参数用于过滤 sales_summary 的销售数据。
-    库存数据始终取最新快照。
+
+    使用 reorder_service 统一引擎计算：
+    - 近6个月加权日均销量（权重 6/5/4/3/2/1）
+    - 采购周期 60 天（2个月）
+    - 动态安全系数：周转<2个月→1.7，周转≥2个月→1.3
+    - 补货量 = max(安全库存 + 周期需求 - 有效库存, 周期需求)
     """
     period = resolve_period(db, month)
 
-    # 1. 获取销售数据日期范围（从 orders 表，按月份过滤）
-    p_start, p_end = period_to_date_range(period)
-    date_range = db.query(
-        func.min(Order.order_date).label("start"),
-        func.max(Order.order_date).label("end"),
-    ).filter(
-        Order.sales_type.in_(["Retail", "Wholesale", "Promotion", "Clearance"]),
-        Order.order_date >= p_start,
-        Order.order_date <= p_end,
-    ).first()
+    result = calculate_reorder(db, period, brand=brand, warehouse=warehouse)
 
-    if not date_range or not date_range.start or not date_range.end:
-        # 该月份无订单数据，但库存仍然展示
-        date_span = 30  # 默认30天
-        today = p_end
-    else:
-        date_span = (date_range.end - date_range.start).days + 1
-        today = date_range.end
-
-    # 2. 获取当前库存（取最新日期的记录）
-    latest_inv_date = db.query(func.max(Inventory.date)).scalar()
-
-    inv_query = (
-        db.query(
-            Product.id.label("product_id"),
-            Product.sku,
-            Product.product_name,
-            Product.brand,
-            Product.unit_cost,
-            Inventory.warehouse,
-            func.sum(Inventory.available_qty).label("available"),
-            func.sum(Inventory.reserved_qty).label("reserved"),
-            func.sum(Inventory.inbound_qty).label("inbound"),
-        )
-        .join(Product, Inventory.product_id == Product.id)
-        .filter(Inventory.date == latest_inv_date)
-    )
-    if brand:
-        inv_query = inv_query.filter(Product.brand == brand)
-    if warehouse:
-        inv_query = inv_query.filter(Inventory.warehouse == warehouse)
-
-    inv_query = inv_query.group_by(
-        Product.id, Product.sku, Product.product_name, Product.brand, Product.unit_cost, Inventory.warehouse
-    )
-    inv_results = inv_query.all()
-
-    # 3. 获取每个商品的总销量（从 sales_summary，按月份过滤）
-    sales_query = (
-        db.query(
-            SalesSummary.product_id,
-            func.sum(SalesSummary.net_qty).label("total_qty"),
-            func.sum(SalesSummary.net_amount).label("total_revenue"),
-        )
-        .filter(SalesSummary.period == period)
-        .group_by(SalesSummary.product_id)
-    )
-    sales_map = {}
-    for s in sales_query.all():
-        sales_map[str(s.product_id)] = {
-            "qty": int(s.total_qty) if s.total_qty else 0,
-            "revenue": float(s.total_revenue) if s.total_revenue else 0,
-        }
-
-    # 4. 获取每个商品最后销售日期（从 order_items join orders，按月份过滤）
-    last_sale_query = (
-        db.query(
-            OrderItem.product_id,
-            func.max(Order.order_date).label("last_sale_date"),
-        )
-        .join(Order, OrderItem.order_id == Order.id)
-        .filter(
-            Order.sales_type.in_(["Retail", "Wholesale", "Promotion", "Clearance"]),
-            Order.order_date >= p_start,
-            Order.order_date <= p_end,
-        )
-        .group_by(OrderItem.product_id)
-    )
-    last_sale_map = {str(r.product_id): r.last_sale_date for r in last_sale_query.all()}
-
-    # 5. 组装分析数据
-    items = []
-    total_capital = 0.0
-    turnover_days_list = []
-    stale_count = 0
-    reorder_count = 0
-
-    for r in inv_results:
-        available = int(r.available) if r.available else 0
-        reserved = int(r.reserved) if r.reserved else 0
-        inbound = int(r.inbound) if r.inbound else 0
-        effective = available + inbound - reserved
-        unit_cost = float(r.unit_cost) if r.unit_cost else 0
-
-        pid = str(r.product_id)
-        sales_info = sales_map.get(pid, {"qty": 0, "revenue": 0})
-        total_sold_qty = sales_info["qty"]
-
-        # 日均销量
-        daily_rate = total_sold_qty / date_span if date_span > 0 and total_sold_qty > 0 else 0
-
-        # 周转天数 = 当前库存 / 日均销量
-        if daily_rate > 0:
-            turnover_days = round(available / daily_rate, 1)
-            turnover_days_list.append(turnover_days)
-        else:
-            turnover_days = None
-
-        # 最后销售日期 & 滞销天数
-        last_sale = last_sale_map.get(pid)
-        if last_sale:
-            stale_days = (today - last_sale).days
-        else:
-            stale_days = None
-
-        # 滞销判定：30天以上无销售且有库存
-        is_stale = (stale_days is not None and stale_days >= 30 and available > 0) or \
-                   (stale_days is None and available > 0)
-        if is_stale:
-            stale_count += 1
-
-        # 安全库存 = 日均销量 × 采购周期
-        safety_stock = round(daily_rate * PROCUREMENT_DAYS, 0)
-
-        # 建议补货量 = 安全库存 × 2 - 有效库存
-        reorder_qty = max(0, int(safety_stock * 2 - effective))
-        needs_reorder = reorder_qty > 0 and available < safety_stock
-        if needs_reorder:
-            reorder_count += 1
-
-        # 资金占用 = 可售库存 × 单位成本
-        capital_occupied = available * unit_cost
-        total_capital += capital_occupied
-
-        # 综合状态
-        if available == 0 and inbound == 0:
-            status = "stockout"
-        elif is_stale:
-            status = "stale"
-        elif needs_reorder:
-            status = "reorder"
-        elif available > safety_stock * 3 and safety_stock > 0:
-            status = "overstock"
-        else:
-            status = "healthy"
-
-        items.append({
-            "sku": r.sku,
-            "product_name": r.product_name,
-            "brand": r.brand,
-            "warehouse": r.warehouse,
-            "available_qty": available,
-            "reserved_qty": reserved,
-            "inbound_qty": inbound,
-            "effective_qty": effective,
-            "unit_cost": unit_cost,
-            "capital_occupied": round(capital_occupied, 2),
-            "total_sold_qty": total_sold_qty,
-            "daily_rate": round(daily_rate, 2),
-            "turnover_days": turnover_days,
-            "last_sale_date": last_sale.isoformat() if last_sale else None,
-            "stale_days": stale_days,
-            "is_stale": is_stale,
-            "safety_stock": int(safety_stock),
-            "reorder_qty": reorder_qty,
-            "needs_reorder": needs_reorder,
-            "status": status,
-        })
-
-    items.sort(key=lambda x: x["capital_occupied"], reverse=True)
-
-    avg_turnover = round(sum(turnover_days_list) / len(turnover_days_list), 1) if turnover_days_list else 0
-
-    summary = {
-        "total_capital": round(total_capital, 2),
-        "avg_turnover_days": avg_turnover,
-        "stale_count": stale_count,
-        "reorder_count": reorder_count,
-        "total_skus": len(items),
-        "stockout_count": sum(1 for i in items if i["status"] == "stockout"),
-        "overstock_count": sum(1 for i in items if i["status"] == "overstock"),
-        "healthy_count": sum(1 for i in items if i["status"] == "healthy"),
-        "date_span": date_span,
-        "data_start": date_range.start.isoformat() if date_range and date_range.start else p_start.isoformat(),
-        "data_end": date_range.end.isoformat() if date_range and date_range.end else p_end.isoformat(),
-        "period": period,
-    }
+    summary = result.get("summary", {})
+    summary["period"] = period
 
     return {
         "status": "success",
         "data": {
             "summary": summary,
-            "items": items,
+            "items": result.get("items", []),
         },
     }
 

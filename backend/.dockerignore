@@ -1,0 +1,8 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+.env
+kill_port.py
+start_backend.py
+test_*.py

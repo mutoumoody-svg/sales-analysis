@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
+    # Kucun 输出目录（旺店通每日出库 JSON 数据）
+    KUCUN_OUTPUT_PATH: str = "/opt/kucun/output"
+
+    # 旺店通开放平台 API
+    WANGDIAN_SID: str = ""
+    WANGDIAN_APPKEY: str = ""
+    WANGDIAN_APPSECRET: str = ""
+    WANGDIAN_SANDBOX: bool = False
+
     model_config = {"env_file": str(ENV_FILE_PATH), "env_file_encoding": "utf-8"}
 
     @property

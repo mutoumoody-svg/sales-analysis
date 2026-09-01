@@ -67,3 +67,11 @@ temp/
 
 # Vite cache
 frontend/node_modules/.vite/
+
+# 构建产物/打包文件
+*.tar.gz
+
+# 测试临时输出
+test_err.txt
+test_result.txt
+screenshots/

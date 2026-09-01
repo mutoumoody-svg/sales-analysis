@@ -19,6 +19,7 @@ from app.models.order import Order, OrderItem
 from app.models.store import Store
 from app.models.product import Product
 from app.models.sales_summary import SalesSummary
+from app.services.system_cost_service import list_missing_cost_skus
 from app.utils.period import resolve_period, period_to_date_range
 
 router = APIRouter()
@@ -488,5 +489,23 @@ def profit_low_margin(
             "loss_count": sum(1 for i in items if i["risk_level"] == "loss"),
             "low_margin_count": sum(1 for i in items if i["risk_level"] == "low_margin"),
             "period": period,
+        },
+    }
+
+
+@router.get("/profit/cost-missing")
+def profit_cost_missing(
+    month: Optional[str] = Query(None, description="月份筛选 YYYY-MM（默认全部）"),
+    db: Session = Depends(get_db),
+) -> Dict:
+    """列出有销售但缺系统成本(products.unit_cost) 的 SKU，供运营补录成本."""
+    period = month
+    items = list_missing_cost_skus(db, period)
+    return {
+        "status": "success",
+        "data": {
+            "items": items,
+            "total": len(items),
+            "total_missing_amount": round(sum(i["net_amount"] for i in items), 2),
         },
     }

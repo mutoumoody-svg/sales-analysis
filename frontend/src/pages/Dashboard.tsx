@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { salesApi, dashboardApi } from '../api';
+import { standardPagination } from '../utils/tableConfig';
 import { usePeriods } from '../hooks/usePeriods';
 import type {
   OverviewData,
@@ -215,15 +216,15 @@ export default function Dashboard() {
 
   const productColumns = [
     { title: '排名', render: (_: unknown, __: unknown, i: number) => i + 1, width: 60 },
-    { title: 'SKU', dataIndex: 'sku', width: 120 },
-    { title: '商品名称', dataIndex: 'product_name', ellipsis: true },
-    { title: '发货量', dataIndex: 'ship_qty', width: 80, render: (v: number) => formatNumber(v) },
-    { title: '退货量', dataIndex: 'return_qty', width: 80, render: (v: number) => v > 0 ? <Tag color="red">{formatNumber(v)}</Tag> : formatNumber(v) },
-    { title: '实际销量', dataIndex: 'total_qty', width: 80, render: (v: number) => formatNumber(v) },
-    { title: '实际销售额', dataIndex: 'total_revenue', width: 120, render: (v: number) => formatCurrency(v), sorter: (a: ProductSales, b: ProductSales) => a.total_revenue - b.total_revenue },
-    { title: '实际成本', dataIndex: 'total_cost', width: 120, render: (v: number) => <span style={{ color: '#ff4d4f' }}>{formatCurrency(v)}</span> },
-    { title: '实际利润', dataIndex: 'gross_profit', width: 120, render: (v: number) => <span style={{ color: '#52c41a' }}>{formatCurrency(v)}</span> },
-    { title: '利润率', dataIndex: 'gross_margin_pct', width: 90, render: (v: number) => <Tag color={v >= 70 ? 'green' : v >= 40 ? 'orange' : 'red'}>{formatPercent(v)}</Tag> },
+    { title: 'SKU', dataIndex: 'sku', width: 120, sorter: (a: ProductSales, b: ProductSales) => a.sku.localeCompare(b.sku) },
+    { title: '商品名称', dataIndex: 'product_name', ellipsis: true, sorter: (a: ProductSales, b: ProductSales) => a.product_name.localeCompare(b.product_name) },
+    { title: '发货量', dataIndex: 'ship_qty', width: 80, render: (v: number) => formatNumber(v), sorter: (a: ProductSales, b: ProductSales) => a.ship_qty - b.ship_qty },
+    { title: '退货量', dataIndex: 'return_qty', width: 80, render: (v: number) => v > 0 ? <Tag color="red">{formatNumber(v)}</Tag> : formatNumber(v), sorter: (a: ProductSales, b: ProductSales) => a.return_qty - b.return_qty },
+    { title: '实际销量', dataIndex: 'total_qty', width: 80, render: (v: number) => formatNumber(v), sorter: (a: ProductSales, b: ProductSales) => a.total_qty - b.total_qty },
+    { title: '实际销售额', dataIndex: 'total_revenue', width: 120, render: (v: number) => formatCurrency(v), sorter: (a: ProductSales, b: ProductSales) => a.total_revenue - b.total_revenue, defaultSortOrder: 'descend' as const },
+    { title: '实际成本', dataIndex: 'total_cost', width: 120, render: (v: number) => <span style={{ color: '#ff4d4f' }}>{formatCurrency(v)}</span>, sorter: (a: ProductSales, b: ProductSales) => a.total_cost - b.total_cost },
+    { title: '实际利润', dataIndex: 'gross_profit', width: 120, render: (v: number) => <span style={{ color: '#52c41a' }}>{formatCurrency(v)}</span>, sorter: (a: ProductSales, b: ProductSales) => a.gross_profit - b.gross_profit },
+    { title: '利润率', dataIndex: 'gross_margin_pct', width: 90, render: (v: number) => <Tag color={v >= 70 ? 'green' : v >= 40 ? 'orange' : 'red'}>{formatPercent(v)}</Tag>, sorter: (a: ProductSales, b: ProductSales) => a.gross_margin_pct - b.gross_margin_pct },
   ];
 
   const gradeColor = (g: string) => {
@@ -468,7 +469,7 @@ export default function Dashboard() {
         </Col>
         <Col xs={24} lg={12}>
           <Card title="商品销售 TOP 10（扣除退货后）" className="chart-card">
-            <Table dataSource={products} columns={productColumns} rowKey="product_id" size="small" pagination={false} scroll={{ y: 300, x: 800 }} />
+            <Table dataSource={products} columns={productColumns} rowKey="product_id" size="small" pagination={standardPagination(10)} scroll={{ y: 300, x: 800 }} />
           </Card>
         </Col>
       </Row>

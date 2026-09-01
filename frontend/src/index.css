@@ -11,6 +11,8 @@ html, body, #root {
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background: #f0f2f5;
+  /* Prevent body scroll on mobile when using bottom tab bar */
+  overscroll-behavior-y: none;
 }
 
 .page-container {
@@ -24,4 +26,222 @@ body {
 
 .chart-card .ant-card-body {
   padding: 16px 24px;
+}
+
+/* ===================== Mobile Responsive ===================== */
+
+@media (max-width: 767px) {
+  .page-container {
+    padding: 12px 12px 80px 12px; /* bottom padding for tab bar */
+  }
+
+  .stat-card .ant-statistic-content-value {
+    font-size: 20px;
+  }
+
+  .chart-card .ant-card-body {
+    padding: 8px 12px;
+  }
+
+  /* Ant Design cards: reduce padding on mobile */
+  .ant-card-body {
+    padding: 12px;
+  }
+
+  /* Ant Design tables: smaller font */
+  .ant-table {
+    font-size: 13px;
+  }
+
+  .ant-table-thead > tr > th {
+    padding: 8px 8px;
+  }
+
+  .ant-table-tbody > tr > td {
+    padding: 8px 8px;
+  }
+
+  /* Ant Design segmented: smaller */
+  .ant-segmented {
+    font-size: 13px;
+  }
+
+  /* Ant Design tabs: smaller */
+  .ant-tabs-tab {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  /* Ant Design statistic title smaller */
+  .ant-statistic-title {
+    font-size: 12px;
+  }
+
+  /* Make select/dropdown touch-friendly */
+  .ant-select-selector {
+    min-height: 36px;
+  }
+}
+
+/* ===================== Mobile Bottom Tab Bar ===================== */
+
+.mobile-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: #fff;
+  border-top: 1px solid #e8e8e8;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 1000;
+  /* Safe area for iPhone notch */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.mobile-tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  height: 100%;
+  cursor: pointer;
+  font-size: 11px;
+  color: #999;
+  transition: color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.mobile-tab-item.active {
+  color: #1677ff;
+}
+
+.mobile-tab-item .anticon {
+  font-size: 20px;
+}
+
+.mobile-header {
+  height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.mobile-header-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Hide horizontal scrollbar but keep functionality */
+.mobile-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mobile-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===================== Mobile Grid Override ===================== */
+/* Force antd Col to reflow on small screens without editing every page */
+
+@media (max-width: 767px) {
+  /* 4-per-row (span=6) -> 2-per-row on mobile */
+  .ant-col-6 {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+  }
+
+  /* 3-per-row (span=8) -> 2-per-row on mobile */
+  .ant-col-8 {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+  }
+
+  /* 2-per-row (span=12) -> full width on mobile */
+  .ant-col-12 {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 14/10 split -> full width */
+  .ant-col-14,
+  .ant-col-10,
+  .ant-col-16 {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* ECharts: reduce default height on mobile */
+  .echarts-for-react {
+    height: 260px !important;
+  }
+
+  /* Ant Design card head: smaller padding */
+  .ant-card-head {
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  /* Ant Design list: smaller */
+  .ant-list-item {
+    padding: 8px 12px;
+  }
+
+  /* Ant Design alert: smaller padding */
+  .ant-alert {
+    padding: 8px 12px;
+  }
+
+  /* Ant Design descriptions: smaller */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    padding: 8px !important;
+    font-size: 13px;
+  }
+
+  /* Ant Design tag: smaller */
+  .ant-tag {
+    font-size: 12px;
+    padding: 0 6px;
+  }
+}
+
+/* ===================== Resizable Table Columns ===================== */
+/* 列宽拖拽把手 */
+.react-resizable-handle {
+  position: absolute;
+  right: -4px;
+  bottom: 0;
+  top: 0;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 1;
+  transition: background 0.2s;
+}
+.react-resizable-handle:hover,
+.react-resizable-handle:active {
+  background: #1677ff;
+}
+/* 让表头单元格显示拖拽光标 */
+.ant-table-thead > tr > th.resizable-th {
+  cursor: col-resize;
+}
+/* 拖拽时禁止选中 */
+.resizing * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }

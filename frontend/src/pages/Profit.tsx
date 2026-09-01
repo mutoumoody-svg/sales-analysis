@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Row, Col, Card, Statistic, Table, Tag, DatePicker, Select, Button, Space, Tabs, Spin, Segmented } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
-import { profitApi, salesApi } from '../api';
+import { profitApi, salesApi, exportApi } from '../api';
+import { standardPagination } from '../utils/tableConfig';
 import { usePeriods } from '../hooks/usePeriods';
 import type { ProfitSummary, StoreProfit, ProductProfit, LowMarginItem, StoreOption } from '../types';
 import { formatCurrency, formatPercent, formatNumber } from '../utils/format';
@@ -33,6 +35,7 @@ export default function Profit() {
   const [lowMargin, setLowMargin] = useState<LowMarginItem[]>([]);
   const [storeOptions, setStoreOptions] = useState<StoreOption[]>([]);
   const [dailyTrend, setDailyTrend] = useState<{ date: string; revenue: number; gross_profit: number; net_profit: number }[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   const params: Record<string, string> = {};
   if (month) params.month = month;
@@ -71,6 +74,22 @@ export default function Profit() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const exportParams: Record<string, string> = {};
+      if (month) exportParams.month = month;
+      if (brand !== '全部') exportParams.brand = brand;
+      const resp = await exportApi.profit(exportParams);
+      const url = window.URL.createObjectURL(resp.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Profit_${month || 'all'}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally { setExporting(false); }
+  };
 
   // ===== 利润瀑布图 =====
   const waterfallOption = () => {
@@ -252,61 +271,66 @@ export default function Profit() {
 
   const storeColumns = [
     { title: '排名', width: 60, render: (_: unknown, __: unknown, i: number) => i + 1 },
-    { title: '店铺', dataIndex: 'store_name', ellipsis: true },
-    { title: '平台', dataIndex: 'platform', width: 80, render: (v: string) => <Tag>{v}</Tag> },
-    { title: '订单数', dataIndex: 'order_count', width: 80, render: (v: number) => formatNumber(v) },
-    { title: '收入', dataIndex: 'revenue', width: 110, render: (v: number) => formatCurrency(v) },
-    { title: '毛利', dataIndex: 'gross_profit', width: 110, render: (v: number) => formatCurrency(v) },
-    { title: '邮资成本', dataIndex: 'shipping_cost', width: 100, render: (v: number) => formatCurrency(v) },
-    { title: '包装成本', dataIndex: 'packaging_cost', width: 100, render: (v: number) => formatCurrency(v) },
-    { title: '贡献利润', dataIndex: 'contribution_profit', width: 110, render: (v: number) => formatCurrency(v) },
+    { title: '店铺', dataIndex: 'store_name', ellipsis: true, sorter: (a: StoreProfit, b: StoreProfit) => a.store_name.localeCompare(b.store_name) },
+    { title: '平台', dataIndex: 'platform', width: 80, render: (v: string) => <Tag>{v}</Tag>, filters: [...new Set(storeProfits.map(s => s.platform))].map(p => ({ text: p, value: p })), onFilter: (v: string | number | boolean, r: StoreProfit) => r.platform === v },
+    { title: '订单数', dataIndex: 'order_count', width: 80, render: (v: number) => formatNumber(v), sorter: (a: StoreProfit, b: StoreProfit) => a.order_count - b.order_count },
+    { title: '收入', dataIndex: 'revenue', width: 110, render: (v: number) => formatCurrency(v), sorter: (a: StoreProfit, b: StoreProfit) => a.revenue - b.revenue, defaultSortOrder: 'descend' as const },
+    { title: '毛利', dataIndex: 'gross_profit', width: 110, render: (v: number) => formatCurrency(v), sorter: (a: StoreProfit, b: StoreProfit) => a.gross_profit - b.gross_profit },
+    { title: '邮资成本', dataIndex: 'shipping_cost', width: 100, render: (v: number) => formatCurrency(v), sorter: (a: StoreProfit, b: StoreProfit) => a.shipping_cost - b.shipping_cost },
+    { title: '包装成本', dataIndex: 'packaging_cost', width: 100, render: (v: number) => formatCurrency(v), sorter: (a: StoreProfit, b: StoreProfit) => a.packaging_cost - b.packaging_cost },
+    { title: '贡献利润', dataIndex: 'contribution_profit', width: 110, render: (v: number) => formatCurrency(v), sorter: (a: StoreProfit, b: StoreProfit) => a.contribution_profit - b.contribution_profit },
     {
       title: '毛利率',
       dataIndex: 'gross_margin_pct',
       width: 90,
       render: (v: number) => <Tag color={v >= 70 ? 'green' : v >= 40 ? 'orange' : 'red'}>{formatPercent(v)}</Tag>,
+      sorter: (a: StoreProfit, b: StoreProfit) => a.gross_margin_pct - b.gross_margin_pct,
     },
   ];
 
   const productColumns = [
     { title: '排名', width: 60, render: (_: unknown, __: unknown, i: number) => i + 1 },
-    { title: 'SKU', dataIndex: 'sku', width: 120 },
-    { title: '商品名称', dataIndex: 'product_name', ellipsis: true },
-    { title: '店铺', dataIndex: 'store_name', width: 150, ellipsis: true },
-    { title: '发货量', dataIndex: 'ship_qty', width: 70, render: (v: number) => formatNumber(v) },
-    { title: '退货量', dataIndex: 'return_qty', width: 70, render: (v: number) => formatNumber(v) },
-    { title: '净销量', dataIndex: 'net_qty', width: 70, render: (v: number) => formatNumber(v) },
-    { title: '净收入', dataIndex: 'net_revenue', width: 110, render: (v: number) => formatCurrency(v) },
-    { title: '净成本', dataIndex: 'net_cost', width: 100, render: (v: number) => formatCurrency(v) },
-    { title: '净利润', dataIndex: 'net_profit', width: 110, render: (v: number) => formatCurrency(v) },
+    { title: 'SKU', dataIndex: 'sku', width: 120, sorter: (a: ProductProfit, b: ProductProfit) => a.sku.localeCompare(b.sku) },
+    { title: '商品名称', dataIndex: 'product_name', ellipsis: true, sorter: (a: ProductProfit, b: ProductProfit) => a.product_name.localeCompare(b.product_name) },
+    { title: '店铺', dataIndex: 'store_name', width: 150, ellipsis: true, sorter: (a: ProductProfit, b: ProductProfit) => a.store_name.localeCompare(b.store_name) },
+    { title: '发货量', dataIndex: 'ship_qty', width: 70, render: (v: number) => formatNumber(v), sorter: (a: ProductProfit, b: ProductProfit) => a.ship_qty - b.ship_qty },
+    { title: '退货量', dataIndex: 'return_qty', width: 70, render: (v: number) => formatNumber(v), sorter: (a: ProductProfit, b: ProductProfit) => a.return_qty - b.return_qty },
+    { title: '净销量', dataIndex: 'net_qty', width: 70, render: (v: number) => formatNumber(v), sorter: (a: ProductProfit, b: ProductProfit) => a.net_qty - b.net_qty },
+    { title: '净收入', dataIndex: 'net_revenue', width: 110, render: (v: number) => formatCurrency(v), sorter: (a: ProductProfit, b: ProductProfit) => a.net_revenue - b.net_revenue, defaultSortOrder: 'descend' as const },
+    { title: '净成本', dataIndex: 'net_cost', width: 100, render: (v: number) => formatCurrency(v), sorter: (a: ProductProfit, b: ProductProfit) => a.net_cost - b.net_cost },
+    { title: '净利润', dataIndex: 'net_profit', width: 110, render: (v: number) => formatCurrency(v), sorter: (a: ProductProfit, b: ProductProfit) => a.net_profit - b.net_profit },
     {
       title: '净利率',
       dataIndex: 'net_margin_pct',
       width: 90,
       render: (v: number) => <Tag color={v >= 70 ? 'green' : v >= 40 ? 'orange' : v >= 0 ? 'volcano' : 'red'}>{formatPercent(v)}</Tag>,
+      sorter: (a: ProductProfit, b: ProductProfit) => a.net_margin_pct - b.net_margin_pct,
     },
   ];
 
   const lowMarginColumns = [
-    { title: 'SKU', dataIndex: 'sku', width: 120 },
-    { title: '商品名称', dataIndex: 'product_name', ellipsis: true },
-    { title: '分类', dataIndex: 'category', width: 100, render: (v: string | null) => v || '-' },
-    { title: '店铺', dataIndex: 'store_name', width: 150, ellipsis: true },
-    { title: '净销量', dataIndex: 'net_qty', width: 70, render: (v: number) => formatNumber(v) },
-    { title: '净收入', dataIndex: 'net_revenue', width: 100, render: (v: number) => formatCurrency(v) },
-    { title: '净成本', dataIndex: 'net_cost', width: 100, render: (v: number) => formatCurrency(v) },
-    { title: '净利润', dataIndex: 'net_profit', width: 100, render: (v: number) => <span style={{ color: v < 0 ? '#ff4d4f' : '#52c41a' }}>{formatCurrency(v)}</span> },
+    { title: 'SKU', dataIndex: 'sku', width: 120, sorter: (a: LowMarginItem, b: LowMarginItem) => a.sku.localeCompare(b.sku) },
+    { title: '商品名称', dataIndex: 'product_name', ellipsis: true, sorter: (a: LowMarginItem, b: LowMarginItem) => a.product_name.localeCompare(b.product_name) },
+    { title: '分类', dataIndex: 'category', width: 100, render: (v: string | null) => v || '-', filters: [...new Set(lowMargin.map(i => i.category).filter(Boolean))].map(c => ({ text: c, value: c })), onFilter: (v: string | number | boolean, r: LowMarginItem) => r.category === v },
+    { title: '店铺', dataIndex: 'store_name', width: 150, ellipsis: true, sorter: (a: LowMarginItem, b: LowMarginItem) => a.store_name.localeCompare(b.store_name) },
+    { title: '净销量', dataIndex: 'net_qty', width: 70, render: (v: number) => formatNumber(v), sorter: (a: LowMarginItem, b: LowMarginItem) => a.net_qty - b.net_qty },
+    { title: '净收入', dataIndex: 'net_revenue', width: 100, render: (v: number) => formatCurrency(v), sorter: (a: LowMarginItem, b: LowMarginItem) => a.net_revenue - b.net_revenue },
+    { title: '净成本', dataIndex: 'net_cost', width: 100, render: (v: number) => formatCurrency(v), sorter: (a: LowMarginItem, b: LowMarginItem) => a.net_cost - b.net_cost },
+    { title: '净利润', dataIndex: 'net_profit', width: 100, render: (v: number) => <span style={{ color: v < 0 ? '#ff4d4f' : '#52c41a' }}>{formatCurrency(v)}</span>, sorter: (a: LowMarginItem, b: LowMarginItem) => a.net_profit - b.net_profit },
     {
       title: '净利率',
       dataIndex: 'net_margin_pct',
       width: 100,
       render: (v: number) => <Tag color={v < 0 ? 'red' : 'orange'}>{formatPercent(v)}</Tag>,
+      sorter: (a: LowMarginItem, b: LowMarginItem) => a.net_margin_pct - b.net_margin_pct,
     },
     {
       title: '风险',
       dataIndex: 'risk_level',
       width: 80,
       render: (v: string) => <Tag color={v === 'loss' ? 'red' : 'orange'}>{v === 'loss' ? '亏损' : '低毛利'}</Tag>,
+      filters: [{ text: '亏损', value: 'loss' }, { text: '低毛利', value: 'low_margin' }],
+      onFilter: (v: string | number | boolean, r: LowMarginItem) => r.risk_level === v,
     },
   ];
 
@@ -361,6 +385,7 @@ export default function Profit() {
             optionFilterProp="label"
           />
           <Button onClick={loadData} loading={loading}>刷新</Button>
+          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>导出Excel</Button>
         </Space>
       </Card>
 
@@ -506,7 +531,7 @@ export default function Profit() {
                   rowKey="store_id"
                   loading={loading}
                   size="small"
-                  pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+                  pagination={standardPagination(20)}
                   scroll={{ x: 900 }}
                 />
               </Card>
@@ -523,7 +548,7 @@ export default function Profit() {
                   rowKey={(r) => `${r.product_id}-${r.store_name}`}
                   loading={loading}
                   size="small"
-                  pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+                  pagination={standardPagination(20)}
                   scroll={{ x: 1000 }}
                 />
               </Card>
@@ -540,7 +565,7 @@ export default function Profit() {
                   rowKey={(r) => `${r.sku}-${r.store_name}`}
                   loading={loading}
                   size="small"
-                  pagination={{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }}
+                  pagination={standardPagination(20)}
                   scroll={{ x: 900 }}
                 />
               </Card>

@@ -31,6 +31,7 @@ from app.models.order import Order, OrderItem
 from app.models.inventory import Inventory
 from app.models.sales_summary import SalesSummary
 from app.services import field_mapping as fm
+from app.services.system_cost_service import recalc_orders_gross_profit
 from sqlalchemy import delete
 
 
@@ -370,6 +371,10 @@ def import_sales_detail(
 
             unit_cost = fm.parse_decimal_nullable(row_dict.get("货品成本"))
             total_cost = fm.parse_decimal_nullable(row_dict.get("货品总成本"))
+            # 系统成本优先：有系统成本时覆盖旺店通成本
+            if product.unit_cost is not None and product.unit_cost > 0:
+                unit_cost = product.unit_cost
+                total_cost = round(product.unit_cost * quantity, 2)
             warehouse = row_dict.get("仓库")
             warehouse = str(warehouse).strip() if warehouse and str(warehouse).strip() not in ("NaN", "nan", "None") else None
 
@@ -395,6 +400,10 @@ def import_sales_detail(
             result.errors.append(f"行 {idx+2}: {str(e)[:100]}")
             result.skipped += 1
             continue
+
+    # 系统成本优先：用系统成本重算本次导入订单的毛利
+    # （订单毛利 = total_amount - Σ明细系统成本，明细缺成本的订单保留导入原值）
+    recalc_orders_gross_profit(db, [o.id for o in order_cache.values()])
 
     db.commit()
     result.finish()
@@ -520,6 +529,15 @@ def import_sales_summary(
                 "ship_profit": fm.parse_decimal(row_dict.get("货品总利润"), 0),
                 "net_profit": fm.parse_decimal(row_dict.get("实际总利润"), 0),
             }
+
+            # 系统成本优先：有系统成本时用系统成本覆盖旺店通成本/利润
+            if product.unit_cost is not None and product.unit_cost > 0:
+                uc = product.unit_cost
+                data["total_cost"] = round(uc * data["ship_qty"], 2)
+                data["return_cost"] = round(uc * data["return_qty"], 2)
+                data["net_cost"] = round(uc * data["net_qty"], 2)
+                data["ship_profit"] = round(data["ship_amount"] - data["total_cost"], 2)
+                data["net_profit"] = round(data["net_amount"] - data["net_cost"], 2)
 
             if existing:
                 # 更新已有记录
