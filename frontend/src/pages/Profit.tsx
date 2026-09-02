@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Row, Col, Card, Statistic, Table, Tag, DatePicker, Select, Button, Space, Tabs, Spin, Segmented } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { profitApi, salesApi, exportApi } from '../api';
+import type { ColumnsType } from 'antd/es/table';
 import { standardPagination } from '../utils/tableConfig';
 import { usePeriods } from '../hooks/usePeriods';
 import type { ProfitSummary, StoreProfit, ProductProfit, LowMarginItem, StoreOption } from '../types';
@@ -37,14 +38,17 @@ export default function Profit() {
   const [dailyTrend, setDailyTrend] = useState<{ date: string; revenue: number; gross_profit: number; net_profit: number }[]>([]);
   const [exporting, setExporting] = useState(false);
 
-  const params: Record<string, string> = {};
-  if (month) params.month = month;
-  if (dateRange) {
-    params.start_date = dateRange[0].format('YYYY-MM-DD');
-    params.end_date = dateRange[1].format('YYYY-MM-DD');
-  }
-  if (selectedStore) params.store_id = selectedStore;
-  if (brand !== '全部') params.brand = brand;
+  const params = useMemo(() => {
+    const value: Record<string, string> = {};
+    if (month) value.month = month;
+    if (dateRange) {
+      value.start_date = dateRange[0].format('YYYY-MM-DD');
+      value.end_date = dateRange[1].format('YYYY-MM-DD');
+    }
+    if (selectedStore) value.store_id = selectedStore;
+    if (brand !== '全部') value.brand = brand;
+    return value;
+  }, [month, dateRange, selectedStore, brand]);
 
   const loadData = useCallback(() => {
     if (!month) return;
@@ -65,7 +69,7 @@ export default function Profit() {
         setDailyTrend(dt.data.data.daily);
       })
       .finally(() => setLoading(false));
-  }, [dateRange, selectedStore, brand, month]);
+  }, [brand, month, params]);
 
   useEffect(() => {
     salesApi.stores().then((res) => setStoreOptions(res.data.data));
@@ -198,7 +202,7 @@ export default function Profit() {
 
     return {
       tooltip: {
-        formatter: (p: { data: number[]; data: { name: string } }) => {
+        formatter: (p: { data: [number, number, number] & { name: string } }) => {
           return `${p.data.name}<br/>销售额: ¥${p.data[0].toLocaleString()}<br/>净利率: ${p.data[1].toFixed(1)}%<br/>净利润: ¥${p.data[2].toLocaleString()}`;
         },
       },
@@ -527,7 +531,7 @@ export default function Profit() {
               <Card>
                 <Table
                   dataSource={storeProfits}
-                  columns={storeColumns}
+                  columns={storeColumns as ColumnsType<StoreProfit>}
                   rowKey="store_id"
                   loading={loading}
                   size="small"
@@ -561,7 +565,7 @@ export default function Profit() {
               <Card title={`低毛利 / 亏损商品预警（共 ${lowMargin.length} 个）`}>
                 <Table
                   dataSource={lowMargin}
-                  columns={lowMarginColumns}
+                  columns={lowMarginColumns as ColumnsType<LowMarginItem>}
                   rowKey={(r) => `${r.sku}-${r.store_name}`}
                   loading={loading}
                   size="small"

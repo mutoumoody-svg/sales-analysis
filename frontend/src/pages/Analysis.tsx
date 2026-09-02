@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Row, Col, Card, Table, Spin, Tag, Tabs, Select, Button, Tooltip, Space, Statistic, Empty, Alert, Typography,
+  Row, Col, Card, Table, Spin, Tag, Tabs, Select, Button, Space, Statistic, Empty, Alert, Typography,
 } from 'antd';
 import {
   DownloadOutlined, CrownOutlined, RiseOutlined, FallOutlined, WalletOutlined,
   LineChartOutlined, DollarOutlined, WarningOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
-import { analysisApi, exportApi, salesApi } from '../api';
+import { analysisApi, exportApi } from '../api';
+import type { ColumnsType } from 'antd/es/table';
 import { standardPagination } from '../utils/tableConfig';
 import { usePeriods } from '../hooks/usePeriods';
-import { formatCurrency, formatCurrencyShort, formatNumber, formatPercent } from '../utils/format';
+import { formatCurrency, formatCurrencyShort, formatNumber } from '../utils/format';
 import type {
   ABCAnalysis, GMROIAnalysis, SalesForecast, CashflowForecast, OptimalInterval,
   ABCItem, GMROIItem, IntervalItem,
@@ -111,12 +112,11 @@ export default function Analysis() {
     else if (activeTab === 'forecast') loadForecast(brand);
     else if (activeTab === 'cashflow') loadCashflow(brand);
     else if (activeTab === 'interval') loadInterval(brand);
-  }, [activeTab, month, brand]);
+  }, [activeTab, month, brand, loadABC, loadGMROI, loadForecast, loadCashflow, loadInterval]);
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const params = { ...brandParams, ...(month ? { period: month, month } : {}) };
       let resp;
       if (activeTab === 'abc') resp = await exportApi.abc({ ...brandParams, period: month });
       else if (activeTab === 'gmroi') resp = await exportApi.gmroi({ ...brandParams, period: month });
@@ -488,7 +488,7 @@ export default function Analysis() {
                   <Card title="ABC分类明细" size="small">
                     <Table
                       dataSource={abcData.items}
-                      columns={abcColumns}
+                      columns={abcColumns as ColumnsType<ABCItem>}
                       rowKey="sku"
                       size="small"
                       scroll={{ x: 900 }}
@@ -547,7 +547,7 @@ export default function Analysis() {
                   <Card title="GMROI明细" size="small">
                     <Table
                       dataSource={gmroiData.items}
-                      columns={gmroiColumns}
+                      columns={gmroiColumns as ColumnsType<GMROIItem>}
                       rowKey="sku"
                       size="small"
                       scroll={{ x: 1000 }}
@@ -597,6 +597,15 @@ export default function Analysis() {
                       </Card>
                     </Col>
                   </Row>
+                  {(forecastData.summary.outlier_periods?.length || 0) > 0 && (
+                    <Alert
+                      showIcon
+                      type="warning"
+                      style={{ marginBottom: 16 }}
+                      message={`预测已排除异常月份：${forecastData.summary.outlier_periods?.join('、')}`}
+                      description={`使用 ${forecastData.summary.effective_data_points} / ${forecastData.summary.data_points} 个数据点拟合，区间为 ${forecastData.summary.confidence_interval || '95%'}。`}
+                    />
+                  )}
                   <Card title="销售趋势与预测" size="small" style={{ marginBottom: 16 }}>
                     {forecastChartOption && <ReactECharts option={forecastChartOption} style={{ height: 400 }} />}
                   </Card>
@@ -620,6 +629,7 @@ export default function Analysis() {
                           columns={[
                             { title: '月份', dataIndex: 'period', key: 'period' },
                             { title: '预测销售额', dataIndex: 'revenue', key: 'revenue', render: (v: number) => formatCurrencyShort(v) },
+                            { title: '置信区间', key: 'interval', render: (_, r) => r.revenue_lower == null ? '-' : `${formatCurrencyShort(r.revenue_lower)} ~ ${formatCurrencyShort(r.revenue_upper || 0)}` },
                             { title: '预测利润', dataIndex: 'profit', key: 'profit', render: (v: number) => formatCurrencyShort(v) },
                             { title: '预测成本', dataIndex: 'cost', key: 'cost', render: (v: number) => formatCurrencyShort(v) },
                           ]}

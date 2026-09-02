@@ -3,6 +3,7 @@ import { Row, Col, Card, Table, Tag, DatePicker, Select, Button, Space, Tabs, Se
 import { DownloadOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { salesApi, exportApi } from '../api';
+import type { ColumnsType } from 'antd/es/table';
 import { standardPagination } from '../utils/tableConfig';
 import { usePeriods } from '../hooks/usePeriods';
 import type { StoreSales, ProductSales, PlatformSales, CategorySales, StoreOption } from '../types';
@@ -26,6 +27,10 @@ interface MonthlyCompareItem {
   revenue_mom: number | null;
   profit_mom: number | null;
   order_count_mom: number | null;
+  revenue_yoy: number | null;
+  profit_yoy: number | null;
+  order_count_yoy: number | null;
+  yoy_period: string;
 }
 
 const { RangePicker } = DatePicker;
@@ -58,14 +63,17 @@ export default function Sales() {
   const [compareData, setCompareData] = useState<MonthlyCompareItem[]>([]);
   const [compareLoading, setCompareLoading] = useState(false);
 
-  const params: Record<string, string> = {};
-  if (brand) params.brand = brand;
-  if (month) params.month = month;
-  if (dateRange) {
-    params.start_date = dateRange[0].format('YYYY-MM-DD');
-    params.end_date = dateRange[1].format('YYYY-MM-DD');
-  }
-  if (selectedStore) params.store_id = selectedStore;
+  const params = useMemo(() => {
+    const value: Record<string, string> = {};
+    if (brand) value.brand = brand;
+    if (month) value.month = month;
+    if (dateRange) {
+      value.start_date = dateRange[0].format('YYYY-MM-DD');
+      value.end_date = dateRange[1].format('YYYY-MM-DD');
+    }
+    if (selectedStore) value.store_id = selectedStore;
+    return value;
+  }, [brand, month, dateRange, selectedStore]);
 
   const loadData = useCallback(() => {
     if (!month) return;
@@ -83,7 +91,7 @@ export default function Sales() {
         setCategories(cat.data.data.categories);
       })
       .finally(() => setLoading(false));
-  }, [brand, month, dateRange, selectedStore]);
+  }, [month, params]);
 
   useEffect(() => {
     salesApi.stores(brand ? { brand } : {}).then((res) => setStoreOptions(res.data.data));
@@ -226,8 +234,10 @@ export default function Sales() {
       sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => a.revenue - b.revenue,
     },
     { title: '销售环比', dataIndex: 'revenue_mom', width: 110, render: renderMom, sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => (a.revenue_mom ?? -999) - (b.revenue_mom ?? -999) },
+    { title: '销售同比', dataIndex: 'revenue_yoy', width: 110, render: renderMom, sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => (a.revenue_yoy ?? -999) - (b.revenue_yoy ?? -999) },
     { title: '毛利', dataIndex: 'profit', width: 120, render: (v: number) => <strong style={{ color: '#52c41a' }}>{formatCurrency(v)}</strong>, sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => a.profit - b.profit },
     { title: '毛利环比', dataIndex: 'profit_mom', width: 110, render: renderMom, sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => (a.profit_mom ?? -999) - (b.profit_mom ?? -999) },
+    { title: '毛利同比', dataIndex: 'profit_yoy', width: 110, render: renderMom, sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => (a.profit_yoy ?? -999) - (b.profit_yoy ?? -999) },
     { title: '成本', dataIndex: 'cost', width: 120, render: (v: number) => formatCurrency(v), sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => a.cost - b.cost },
     {
       title: '毛利率',
@@ -238,6 +248,7 @@ export default function Sales() {
     },
     { title: '订单数', dataIndex: 'order_count', width: 90, render: (v: number) => formatNumber(v), sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => a.order_count - b.order_count },
     { title: '订单环比', dataIndex: 'order_count_mom', width: 110, render: renderMom, sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => (a.order_count_mom ?? -999) - (b.order_count_mom ?? -999) },
+    { title: '订单同比', dataIndex: 'order_count_yoy', width: 110, render: renderMom, sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => (a.order_count_yoy ?? -999) - (b.order_count_yoy ?? -999) },
     { title: '实际销量', dataIndex: 'net_qty', width: 90, render: (v: number) => formatQty(v), sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => a.net_qty - b.net_qty },
     { title: '退货率', dataIndex: 'return_rate', width: 90, render: (v: number) => <Tag color={v >= 15 ? 'red' : v >= 8 ? 'orange' : 'green'}>{v.toFixed(1)}%</Tag>, sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => a.return_rate - b.return_rate },
     { title: '退货金额', dataIndex: 'return_amount', width: 110, render: (v: number) => formatCurrency(v), sorter: (a: MonthlyCompareItem, b: MonthlyCompareItem) => a.return_amount - b.return_amount },
@@ -370,7 +381,7 @@ export default function Sales() {
               <Card>
                 <Table
                   dataSource={stores}
-                  columns={storeColumns}
+                  columns={storeColumns as ColumnsType<StoreSales>}
                   rowKey="store_id"
                   loading={loading}
                   size="small"
@@ -387,7 +398,7 @@ export default function Sales() {
               <Card>
                 <Table
                   dataSource={products}
-                  columns={productColumns}
+                  columns={productColumns as ColumnsType<ProductSales>}
                   rowKey="product_id"
                   loading={loading}
                   size="small"
@@ -524,7 +535,7 @@ export default function Sales() {
                       size="small"
                       pagination={standardPagination(20)}
                       scroll={{ x: 1300 }}
-                        summary={(rows) => {
+            summary={(_rows) => {
                           if (!compareSummary) return null;
                           return (
                             <Table.Summary fixed>

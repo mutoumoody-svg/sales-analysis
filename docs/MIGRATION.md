@@ -55,3 +55,20 @@ pg_dump sales_analysis > sales_analysis_backup.sql
 ```
 
 `products.unit_cost` 是全系统唯一成本来源（旺店通 cost_price 不参与利润计算），迁移数据库时必须带上。
+# 2026-09 P0/P1 升级
+
+升级前先备份 PostgreSQL。随后执行：
+
+```bash
+docker compose up -d --build
+docker compose exec -T db psql -U postgres -d sales_analysis < database/migrate_v4.sql
+```
+
+本次迁移新增：
+
+- `sku_costs.channel`：支持明确的渠道成本范围。
+- `purchase_plans`：保存采购草案、确认数量、确认人和预计到货日。
+
+部署前必须在 `.env` 设置强随机 `ADMIN_API_KEY`。升级后进入“运营设置”，依次执行数据质量检查、补录成本、重算当前月份，确认缺成本数量为可接受范围后再使用利润和采购结果。
+
+---

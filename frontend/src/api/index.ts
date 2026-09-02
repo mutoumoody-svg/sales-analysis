@@ -134,3 +134,16 @@ export const shopDailyApi = {
   dailyDetail: (date: string, shop: string = '慕咖') => api.get('/shop-daily/daily-detail', { params: { date, shop } }),
   availableDates: (shop: string = '慕咖') => api.get('/shop-daily/available-dates', { params: { shop } }),
 };
+
+// ===== Operations governance =====
+export const operationsApi = {
+  quality: (params?: Record<string, unknown>) => api.get('/operations/data-quality', { params }),
+  costs: (params?: Record<string, unknown>) => api.get('/operations/costs', { params }),
+  saveCost: (data: Record<string, unknown>) => api.post('/operations/costs', data),
+  deleteCost: (id: string) => api.delete(`/operations/costs/${id}`),
+  recalculateCosts: (params?: Record<string, unknown>) => api.post('/operations/costs/recalculate', null, { params, timeout: 120000 }),
+  purchasePlans: (params?: Record<string, unknown>) => api.get('/operations/purchase-plans', { params }),
+  generatePurchasePlans: (params?: Record<string, unknown>) => api.post('/operations/purchase-plans/generate', null, { params, timeout: 120000 }),
+  updatePurchasePlan: (id: string, data: Record<string, unknown>) => api.patch(`/operations/purchase-plans/${id}`, data),
+  dailyAlerts: () => api.get('/operations/daily-alerts'),
+};

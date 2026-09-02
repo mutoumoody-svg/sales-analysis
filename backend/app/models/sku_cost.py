@@ -26,6 +26,7 @@ class SkuCost(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     product_id = Column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False, index=True, comment="商品")
     store_id = Column(UUID(as_uuid=True), ForeignKey("stores.id"), nullable=True, index=True, comment="店铺(NULL=标准成本)")
+    channel = Column(String(50), nullable=True, index=True, comment="渠道，仅cost_type=channel时使用")
     cost_type = Column(String(30), nullable=False, default="standard", comment="成本类型: store/channel/standard/default")
     unit_cost = Column(Numeric(14, 4), nullable=False, comment="单位成本")
     effective_date = Column(Date, nullable=False, comment="生效日期")

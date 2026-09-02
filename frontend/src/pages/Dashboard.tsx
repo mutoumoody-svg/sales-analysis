@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Row, Col, Card, Statistic, Table, Spin, Tag, Segmented, Progress, List, Typography, Space, Alert, Select } from 'antd';
+import { Row, Col, Card, Statistic, Table, Spin, Tag, Segmented, Progress, Typography, Space, Select } from 'antd';
 import {
   ArrowUpOutlined,
   ShoppingCartOutlined,
@@ -415,7 +415,7 @@ export default function Dashboard() {
         </Col>
         <Col xs={12} sm={12} md={6}>
           <Card className="stat-card">
-            <Statistic title="退货金额" value={overview?.return_amount || 0} precision={2} prefix="¥" valueStyle={{ color: '#ff4d4f' }} prefix={<RollbackOutlined />} />
+            <Statistic title="退货金额" value={overview?.return_amount || 0} precision={2} prefix={<RollbackOutlined />} valueStyle={{ color: '#ff4d4f' }} />
             <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
               退货率 {overview?.return_rate || 0}%
             </div>

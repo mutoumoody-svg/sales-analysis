@@ -13,6 +13,7 @@ from app.models.expense import Expense
 from app.models.profit_analysis import ProfitAnalysis
 from app.models.ai_recommendation import AIRecommendation
 from app.models.sales_summary import SalesSummary
+from app.models.purchase_plan import PurchasePlan
 
 __all__ = [
     "Store",
@@ -26,4 +27,5 @@ __all__ = [
     "ProfitAnalysis",
     "AIRecommendation",
     "SalesSummary",
+    "PurchasePlan",
 ]

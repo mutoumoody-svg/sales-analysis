@@ -11,12 +11,29 @@ Analysis Service - 高级分析模型.
 from datetime import date, timedelta
 from typing import Optional
 from collections import defaultdict
+from math import sqrt
+from statistics import median
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, asc
 
 from app.models import SalesSummary, Product, Inventory, Expense, Store
 from app.models.order import Order
+
+
+def detect_outlier_indices(values: list[float], threshold: float = 3.5) -> set[int]:
+    """Return robust MAD-based outliers without assuming a normal distribution."""
+    if len(values) < 5:
+        return set()
+    center = median(values)
+    deviations = [abs(value - center) for value in values]
+    mad = median(deviations)
+    if mad == 0:
+        return {i for i, value in enumerate(values) if value != center}
+    return {
+        i for i, value in enumerate(values)
+        if 0.6745 * abs(value - center) / mad > threshold
+    }
 
 
 class AnalysisService:
@@ -292,6 +309,7 @@ class AnalysisService:
         db: Session,
         brand: Optional[str] = None,
         forecast_months: int = 3,
+        exclude_outliers: bool = True,
     ) -> dict:
         """销售预测 - 基于历史月度数据的线性回归.
 
@@ -373,13 +391,23 @@ class AnalysisService:
             }
 
         # 线性回归 (最小二乘法)
-        x = list(range(n))
-        y_rev = [h["revenue"] for h in history]
-        y_profit = [h["profit"] for h in history]
-        y_cost = [h["cost"] for h in history]
+        all_revenue = [h["revenue"] for h in history]
+        outlier_indices = detect_outlier_indices(all_revenue) if exclude_outliers else set()
+        fit_indices = [i for i in range(n) if i not in outlier_indices]
+        if len(fit_indices) < 2:
+            fit_indices = list(range(n))
+            outlier_indices = set()
+        for i, item in enumerate(history):
+            item["is_outlier"] = i in outlier_indices
 
-        x_mean = sum(x) / n
-        y_mean = sum(y_rev) / n
+        x = fit_indices
+        y_rev = [history[i]["revenue"] for i in fit_indices]
+        y_profit = [history[i]["profit"] for i in fit_indices]
+        y_cost = [history[i]["cost"] for i in fit_indices]
+        n_fit = len(fit_indices)
+
+        x_mean = sum(x) / n_fit
+        y_mean = sum(y_rev) / n_fit
 
         numerator = sum((xi - x_mean) * (yi - y_mean) for xi, yi in zip(x, y_rev))
         denominator = sum((xi - x_mean) ** 2 for xi in x)
@@ -394,22 +422,24 @@ class AnalysisService:
         r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
 
         # 利润趋势
-        y_profit_mean = sum(y_profit) / n
+        y_profit_mean = sum(y_profit) / n_fit
         num_p = sum((xi - x_mean) * (yi - y_profit_mean) for xi, yi in zip(x, y_profit))
         slope_profit = num_p / denominator if denominator != 0 else 0
         intercept_profit = y_profit_mean - slope_profit * x_mean
 
         # 成本趋势
-        y_cost_mean = sum(y_cost) / n
+        y_cost_mean = sum(y_cost) / n_fit
         num_c = sum((xi - x_mean) * (yi - y_cost_mean) for xi, yi in zip(x, y_cost))
         slope_cost = num_c / denominator if denominator != 0 else 0
         intercept_cost = y_cost_mean - slope_cost * x_mean
 
         # 平均环比增长率
         growth_rates = []
-        for i in range(1, n):
-            if y_rev[i - 1] > 0:
-                growth_rates.append((y_rev[i] - y_rev[i - 1]) / y_rev[i - 1] * 100)
+        for i in range(1, len(all_revenue)):
+            if i in outlier_indices or i - 1 in outlier_indices:
+                continue
+            if all_revenue[i - 1] > 0:
+                growth_rates.append((all_revenue[i] - all_revenue[i - 1]) / all_revenue[i - 1] * 100)
         avg_growth = sum(growth_rates) / len(growth_rates) if growth_rates else 0
 
         # 预测未来N个月
@@ -417,6 +447,9 @@ class AnalysisService:
         last_period = history[-1]["period"]
         yr, mo = last_period.split("-")
         yr, mo = int(yr), int(mo)
+
+        residual_std = sqrt(ss_res / max(1, n_fit - 2))
+        confidence_delta = 1.96 * residual_std
 
         for i in range(1, forecast_months + 1):
             next_x = n - 1 + i
@@ -433,15 +466,17 @@ class AnalysisService:
             forecast.append({
                 "period": f"{next_yr}-{next_mo:02d}",
                 "revenue": round(pred_rev, 2),
+                "revenue_lower": round(max(0, pred_rev - confidence_delta), 2),
+                "revenue_upper": round(pred_rev + confidence_delta, 2),
                 "profit": round(pred_profit, 2),
                 "cost": round(pred_cost, 2),
                 "is_forecast": True,
             })
 
         # 置信度评估
-        if r_squared >= 0.7 and n >= 4:
+        if r_squared >= 0.7 and n_fit >= 4:
             confidence = "high"
-        elif r_squared >= 0.4 and n >= 3:
+        elif r_squared >= 0.4 and n_fit >= 3:
             confidence = "medium"
         else:
             confidence = "low"
@@ -462,6 +497,9 @@ class AnalysisService:
                 "next_month_profit": forecast[0]["profit"] if forecast else 0,
                 "confidence": confidence,
                 "data_points": n,
+                "effective_data_points": n_fit,
+                "outlier_periods": [history[i]["period"] for i in sorted(outlier_indices)],
+                "confidence_interval": "95%",
                 "trend_direction": "up" if slope > 0 else ("down" if slope < 0 else "flat"),
             },
         }

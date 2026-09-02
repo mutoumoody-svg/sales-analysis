@@ -24,6 +24,7 @@ from app.services.wangdian_sync_service import (
     get_wangdian_sync_status as _get_wangdian_sync_status,
 )
 from app.core.config import settings
+from app.core.security import require_admin
 
 router = APIRouter()
 
@@ -49,7 +50,10 @@ def wangdian_sync_status(db: Session = Depends(get_db)) -> Dict:
 
 
 @router.post("/inventory/sync-from-wangdian")
-def trigger_sync_from_wangdian(db: Session = Depends(get_db)) -> Dict:
+def trigger_sync_from_wangdian(
+    _: None = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Dict:
     """触发从旺店通API同步库存到 sales-analysis.
 
     调用旺店通 stock_query_all.php 接口拉取全量库存数据，

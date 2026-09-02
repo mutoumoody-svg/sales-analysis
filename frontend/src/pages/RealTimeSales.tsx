@@ -2,10 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { Row, Col, Card, Statistic, Table, Spin, Tag, Segmented, DatePicker, Typography, Space, Alert, Empty } from 'antd';
 import {
   ThunderboltOutlined,
-  ShoppingCartOutlined,
-  DollarOutlined,
-  RiseOutlined,
-  FallOutlined,
   ShopOutlined,
   InboxOutlined,
   TrophyOutlined,
@@ -15,6 +11,7 @@ import {
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
 import { realtimeApi } from '../api';
+import type { ColumnsType } from 'antd/es/table';
 import { standardPagination, numberSorter, stringSorter } from '../utils/tableConfig';
 import type {
   RealtimeOverview,
@@ -23,12 +20,12 @@ import type {
   RealtimeByShop,
   RealtimeByWarehouse,
   RealtimeDailyDetail,
+  RealtimeSkuDetail,
   RealtimeMonthlyItem,
 } from '../types';
-import { formatCurrency, formatCurrencyShort, formatNumber, formatPercent } from '../utils/format';
+import { formatCurrency, formatCurrencyShort, formatNumber } from '../utils/format';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 type PeriodDays = 7 | 14 | 30;
 
@@ -102,7 +99,6 @@ export default function RealTimeSales() {
     const costData = trend.map((t) => t.cost_amount);
     const profitData = trend.map((t) => t.gross_profit);
     const marginData = trend.map((t) => t.margin_pct);
-    const orderData = trend.map((t) => t.orders);
 
     return {
       tooltip: {
@@ -506,7 +502,7 @@ export default function RealTimeSales() {
           >
             <Table
               dataSource={topSkus}
-              columns={topSkuColumns}
+              columns={topSkuColumns as ColumnsType<RealtimeTopSku>}
               rowKey="spec_no"
               size="small"
               scroll={{ x: 850 }}
@@ -537,7 +533,7 @@ export default function RealTimeSales() {
           >
             <Table
               dataSource={byShop}
-              columns={shopColumns}
+              columns={shopColumns as ColumnsType<RealtimeByShop>}
               rowKey="shop"
               size="small"
               scroll={{ x: 650 }}
@@ -552,7 +548,7 @@ export default function RealTimeSales() {
           >
             <Table
               dataSource={byWarehouse}
-              columns={warehouseColumns}
+              columns={warehouseColumns as ColumnsType<RealtimeByWarehouse>}
               rowKey="warehouse"
               size="small"
               scroll={{ x: 600 }}
@@ -626,7 +622,7 @@ export default function RealTimeSales() {
             </Row>
             <Table
               dataSource={dailyDetail.details}
-              columns={detailColumns}
+              columns={detailColumns as ColumnsType<RealtimeSkuDetail>}
               rowKey="spec_no"
               size="small"
               scroll={{ x: 1000 }}
@@ -646,7 +642,7 @@ export default function RealTimeSales() {
         {monthly.length > 0 ? (
           <Table
             dataSource={monthly}
-            columns={monthlyColumns}
+            columns={monthlyColumns as ColumnsType<RealtimeMonthlyItem>}
             rowKey="month"
             size="small"
             scroll={{ x: 900 }}

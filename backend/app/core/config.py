@@ -5,7 +5,6 @@ Settings are loaded from environment variables / .env file.
 
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from pydantic import Field
 
 # .env 文件位置：backend/.env（相对于本文件的上级目录）
 ENV_FILE_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
@@ -16,11 +15,12 @@ class Settings(BaseSettings):
 
     # Application
     APP_NAME: str = "AI Business Decision Platform"
-    DEBUG: bool = True
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = False
     API_V1_PREFIX: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/sales_analysis"
+    DATABASE_URL: str
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
@@ -34,12 +34,15 @@ class Settings(BaseSettings):
     WANGDIAN_APPSECRET: str = ""
     WANGDIAN_SANDBOX: bool = False
 
+    # Mutation endpoints (imports, sync, cost maintenance)
+    ADMIN_API_KEY: str = ""
+
     model_config = {"env_file": str(ENV_FILE_PATH), "env_file_encoding": "utf-8"}
 
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS origins from comma-separated string."""
-        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
 
 settings = Settings()

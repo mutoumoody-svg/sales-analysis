@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Row, Col, Card, Table, Tag, Select, Button, Space, Tabs, Statistic, Input } from 'antd';
-import { ShopOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { salesApi } from '../api';
+import type { ColumnsType } from 'antd/es/table';
 import { standardPagination } from '../utils/tableConfig';
 import { usePeriods } from '../hooks/usePeriods';
 import type {
@@ -14,7 +14,7 @@ import type {
   CrossSales,
   StoreOption,
 } from '../types';
-import { formatCurrency, formatCurrencyShort, formatNumber, formatPercent, formatQty } from '../utils/format';
+import { formatCurrency, formatCurrencyShort, formatPercent, formatQty } from '../utils/format';
 
 const brandOptions = [
   { label: '全部品牌', value: '' },
@@ -64,9 +64,12 @@ export default function StoreChannel() {
   const [productLoading, setProductLoading] = useState(false);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
 
-  const params: Record<string, string> = {};
-  if (brand) params.brand = brand;
-  if (month) params.month = month;
+  const params = useMemo(() => {
+    const value: Record<string, string> = {};
+    if (brand) value.brand = brand;
+    if (month) value.month = month;
+    return value;
+  }, [brand, month]);
 
   // ---- Load store list + overview + channel data ----
   const loadOverviewData = useCallback(() => {
@@ -82,7 +85,7 @@ export default function StoreChannel() {
         setCrossData(ch.data.data.cross);
       })
       .finally(() => setLoading(false));
-  }, [brand, month]);
+  }, [month, params]);
 
   // ---- Load store options ----
   useEffect(() => {
@@ -108,7 +111,7 @@ export default function StoreChannel() {
         setStoreProductSummary(res.data.data.summary);
       })
       .finally(() => setProductLoading(false));
-  }, [selectedStoreId, brand, month]);
+  }, [selectedStoreId, month, params]);
 
   useEffect(() => {
     loadStoreProducts();
@@ -513,7 +516,7 @@ export default function StoreChannel() {
                   <Card title="店铺排名明细">
                     <Table
                       dataSource={stores}
-                      columns={storeColumns}
+                      columns={storeColumns as ColumnsType<StoreSales>}
                       rowKey="store_id"
                       loading={loading}
                       size="small"
@@ -611,7 +614,7 @@ export default function StoreChannel() {
                 <Card title={`商品明细（${selectedStoreId ? storeOptions.find((s) => s.id === selectedStoreId)?.store_name : ''}）`}>
                   <Table
                     dataSource={filteredProducts}
-                    columns={productDetailColumns}
+                    columns={productDetailColumns as ColumnsType<StoreProductDetail>}
                     rowKey="product_id"
                     loading={productLoading}
                     size="small"

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Row, Col, Card, Statistic, Table, Spin, Tag, Segmented, Typography, Space, Alert, Empty, DatePicker } from 'antd';
+import { Row, Col, Card, Statistic, Table, Spin, Tag, Segmented, Space, Alert, Empty, DatePicker } from 'antd';
 import {
   ShopOutlined,
   ShoppingCartOutlined,
@@ -7,14 +7,11 @@ import {
   RiseOutlined,
   FallOutlined,
   TrophyOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
 import { shopDailyApi } from '../api';
 import { formatCurrency, formatCurrencyShort, formatNumber } from '../utils/format';
-
-const { Text } = Typography;
 
 type PeriodDays = 7 | 14 | 30;
 
@@ -128,7 +125,7 @@ export default function ShopDaily() {
     };
   }, [byShop]);
 
-  const trendColumns = [
+  const _trendColumns = [
     { title: '日期', dataIndex: 'date', render: (v: string) => v.slice(5) },
     { title: '订单数', dataIndex: 'orders', align: 'right' as const, sorter: (a: TrendItem, b: TrendItem) => a.orders - b.orders },
     { title: '成交', dataIndex: 'paid', align: 'right' as const, render: (v: number) => formatCurrency(v), sorter: (a: TrendItem, b: TrendItem) => a.paid - b.paid },

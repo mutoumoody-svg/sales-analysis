@@ -935,6 +935,8 @@ def sales_monthly_compare(
         }
     # 按月份升序
     period_list = sorted(set(period_list))
+    yoy_periods = [f"{int(p[:4]) - 1}{p[4:]}" for p in period_list]
+    query_periods = sorted(set(period_list + yoy_periods))
 
     # 查询每个月汇总
     query = db.query(
@@ -948,7 +950,7 @@ def sales_monthly_compare(
         func.sum(SalesSummary.net_cost).label("cost"),
         func.sum(SalesSummary.commission_cost).label("commission_cost"),
         func.sum(SalesSummary.net_profit).label("profit"),
-    ).filter(SalesSummary.period.in_(period_list))
+    ).filter(SalesSummary.period.in_(query_periods))
 
     if brand:
         query = query.join(Product, SalesSummary.product_id == Product.id).filter(Product.brand == brand)
@@ -957,8 +959,8 @@ def sales_monthly_compare(
     monthly_rows = {row.period: row for row in query.all()}
 
     # 订单数从 orders 表按月统计
-    p_start, p_end = period_to_date_range(period_list[0])  # 简单用第一个月
-    p_last_start, p_last_end = period_to_date_range(period_list[-1])
+    p_start, p_end = period_to_date_range(query_periods[0])
+    p_last_start, p_last_end = period_to_date_range(query_periods[-1])
     order_count_q = db.query(
         func.date_trunc("month", Order.order_date).label("month_start"),
         func.count(Order.id).label("order_count"),
@@ -997,6 +999,11 @@ def sales_monthly_compare(
         net_qty = int(row.net_qty) if row.net_qty else 0
         ship_qty = int(row.ship_qty) if row.ship_qty else 0
         return_qty = int(row.return_qty) if row.return_qty else 0
+        previous_year_period = f"{int(p[:4]) - 1}{p[4:]}"
+        yoy_row = monthly_rows.get(previous_year_period)
+        yoy_revenue = float(yoy_row.revenue or 0) if yoy_row else 0
+        yoy_profit = float(yoy_row.profit or 0) if yoy_row else 0
+        yoy_orders = order_count_map.get(previous_year_period, 0)
 
         gross_margin = round(profit / revenue * 100, 2) if revenue > 0 else 0
         return_rate = round(return_amount / ship_amount * 100, 2) if ship_amount > 0 else 0
@@ -1036,6 +1043,10 @@ def sales_monthly_compare(
             "revenue_mom": revenue_mom,
             "profit_mom": profit_mom,
             "order_count_mom": order_count_mom,
+            "revenue_yoy": round((revenue - yoy_revenue) / yoy_revenue * 100, 2) if yoy_revenue > 0 else None,
+            "profit_yoy": round((profit - yoy_profit) / abs(yoy_profit) * 100, 2) if yoy_profit != 0 else None,
+            "order_count_yoy": round((order_count_map.get(p, 0) - yoy_orders) / yoy_orders * 100, 2) if yoy_orders > 0 else None,
+            "yoy_period": previous_year_period,
         }
         comparison.append(item)
         prev = item

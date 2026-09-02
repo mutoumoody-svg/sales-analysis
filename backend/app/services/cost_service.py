@@ -69,6 +69,7 @@ def get_unit_cost(
                 and_(
                     SkuCost.product_id == product_id,
                     SkuCost.cost_type == "channel",
+                    SkuCost.channel == store.channel,
                     SkuCost.effective_date <= order_date,
                 )
             )
@@ -94,6 +95,11 @@ def get_unit_cost(
     )
     if standard_cost:
         return standard_cost.unit_cost
+
+    # Backward-compatible SKU master cost while sku_costs is being adopted.
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if product and product.unit_cost is not None and product.unit_cost > 0:
+        return product.unit_cost
 
     # Priority 4: Default cost
     default_cost = (

@@ -27,14 +27,20 @@ fi
 
 # Create .env from template if not exists
 if [ ! -f .env ]; then
-    cp .env.docker .env
+    cp .env.example .env
     echo ">>> 已创建 .env 文件，请修改其中的数据库密码"
+    echo ">>> 配置完成后重新运行 ./deploy.sh"
+    exit 1
 fi
 
 # Build and start
 echo ">>> 构建镜像并启动服务..."
 docker compose build
 docker compose up -d
+
+# Apply idempotent schema upgrades for existing database volumes.
+echo ">>> 应用数据库迁移..."
+docker compose exec -T db psql -U postgres -d sales_analysis < database/migrate_v4.sql
 
 # Wait for services to be ready
 echo ">>> 等待服务启动..."

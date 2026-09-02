@@ -327,6 +327,7 @@ def calculate_reorder(
             status = "healthy"
 
         items.append({
+            "product_id": pid,
             "sku": r.sku,
             "product_name": r.product_name,
             "brand": r.brand,

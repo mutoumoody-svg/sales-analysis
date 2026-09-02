@@ -44,10 +44,11 @@ def get_gmroi_analysis(
 def get_sales_forecast(
     brand: Optional[str] = Query(None, description="品牌"),
     forecast_months: int = Query(3, description="预测月数"),
+    exclude_outliers: bool = Query(True, description="是否排除异常月份"),
     db: Session = Depends(get_db),
 ):
     """销售预测 - 基于线性回归."""
-    return analysis_service.get_sales_forecast(db, brand=brand, forecast_months=forecast_months)
+    return analysis_service.get_sales_forecast(db, brand=brand, forecast_months=forecast_months, exclude_outliers=exclude_outliers)
 
 
 @router.get("/analysis/cashflow")

@@ -13,6 +13,7 @@ import {
   MenuOutlined,
   ThunderboltOutlined,
   FileTextOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -36,6 +37,7 @@ const menuItems: NavItem[] = [
   { key: '/agents', icon: <RobotOutlined />, label: 'AI决策', shortLabel: 'AI' },
   { key: '/analysis', icon: <BarChartOutlined />, label: '高级分析', shortLabel: '分析' },
   { key: '/import', icon: <CloudUploadOutlined />, label: '数据导入', shortLabel: '导入' },
+  { key: '/operations', icon: <SettingOutlined />, label: '运营设置', shortLabel: '设置' },
 ];
 
 // Bottom tab bar shows these 4 + a "more" button
@@ -156,7 +158,7 @@ export default function MainLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[selectedKey]}
-          items={menuItems}
+          items={menuItems.map(({ shortLabel: _shortLabel, ...item }) => item)}
           onClick={({ key }) => navigate(key)}
         />
       </Sider>

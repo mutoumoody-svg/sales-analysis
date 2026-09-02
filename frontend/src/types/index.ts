@@ -32,6 +32,8 @@ export interface StoreSales {
   gross_profit: number;        // 实际利润
   gross_margin_pct: number;
   commission_cost: number;
+  order_count: number;
+  total_discount: number;
 }
 
 export interface ProductSales {
@@ -70,6 +72,7 @@ export interface PlatformSales {
   total_cost: number;
   gross_profit: number;
   gross_margin_pct: number;
+  order_count: number;
 }
 
 export interface CategorySales {
@@ -94,6 +97,8 @@ export interface ProfitSummary {
   contribution_profit: number;
   net_profit: number;
   net_margin_pct: number;
+  net_cost: number;
+  commission_cost: number;
 }
 
 export interface StoreProfit {
@@ -234,6 +239,8 @@ export interface InventoryAnalysisSummary {
   safety_factor_slow: number;
   turnover_threshold_days: number;
   period?: string;
+  data_start?: string;
+  data_end?: string;
 }
 
 export interface InventoryAnalysis {
@@ -677,6 +684,7 @@ export interface ForecastHistoryItem {
   cost: number;
   ship_qty: number;
   return_qty: number;
+  is_outlier?: boolean;
 }
 
 export interface ForecastItem {
@@ -685,6 +693,8 @@ export interface ForecastItem {
   profit: number;
   cost: number;
   is_forecast: boolean;
+  revenue_lower?: number;
+  revenue_upper?: number;
 }
 
 export interface SalesForecast {
@@ -703,6 +713,9 @@ export interface SalesForecast {
     next_month_profit: number;
     confidence: 'high' | 'medium' | 'low';
     data_points: number;
+    effective_data_points?: number;
+    outlier_periods?: string[];
+    confidence_interval?: string;
     trend_direction: 'up' | 'down' | 'flat';
   };
 }

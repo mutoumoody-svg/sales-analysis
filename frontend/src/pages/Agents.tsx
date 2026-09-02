@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Row, Col, Card, Table, Spin, Tag, Tabs, Statistic, Progress, List,
-  Typography, Space, Alert, Select, Button, Tooltip, Empty, Badge,
+  Typography, Space, Alert, Select, Button, Empty, Badge,
 } from 'antd';
 import {
   RobotOutlined, ThunderboltOutlined, QuestionCircleOutlined,
@@ -9,7 +9,7 @@ import {
   ShoppingCartOutlined, DollarOutlined, RocketOutlined, ReloadOutlined,
   RiseOutlined, FallOutlined, AlertOutlined,
 } from '@ant-design/icons';
-import { agentApi, salesApi } from '../api';
+import { agentApi } from '../api';
 import { standardPagination } from '../utils/tableConfig';
 import { usePeriods } from '../hooks/usePeriods';
 import type {
@@ -17,9 +17,9 @@ import type {
   ProcurementAgentResult, FinanceAgentResult, OperationAgentResult,
   AgentRecommendation,
 } from '../types';
-import { formatCurrency, formatCurrencyShort, formatNumber, formatPercent } from '../utils/format';
+import { formatCurrency, formatCurrencyShort, formatNumber } from '../utils/format';
 
-const { Text, Paragraph, Title } = Typography;
+const { Text, Title } = Typography;
 
 type BrandType = '全部' | '慕咖STTOKE' | '慕咖（MOODY）' | 'MoodyCoffee' | '巴恩天然';
 

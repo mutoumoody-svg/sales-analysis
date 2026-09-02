@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.database import get_db
+from app.core.security import require_admin
 from app.services.import_service import (
     import_sales_detail,
     import_sales_summary,
@@ -71,6 +72,7 @@ def _cleanup(path: str):
 # ============================================
 @router.post("/import/detail")
 async def import_detail(
+    _: None = Depends(require_admin),
     file: UploadFile = File(...),
     sheet_name: Optional[str] = Form(None, description="Sheet名称，不传则自动检测第一个Sheet"),
     period: Optional[str] = Form(None, description="会计期间 YYYY-MM，仅用于记录"),
@@ -105,6 +107,7 @@ async def import_detail(
 # ============================================
 @router.post("/import/summary")
 async def import_summary(
+    _: None = Depends(require_admin),
     file: UploadFile = File(...),
     sheet_name: str = Form("Sheet1"),
     period: Optional[str] = Form(None, description="会计期间 YYYY-MM，不传则从文件名推断"),
@@ -137,6 +140,7 @@ async def import_summary(
 # ============================================
 @router.post("/import/inventory")
 async def import_inventory_route(
+    _: None = Depends(require_admin),
     file: UploadFile = File(...),
     snapshot_date: Optional[str] = Form(None),
     db: Session = Depends(get_db),
@@ -166,6 +170,7 @@ async def import_inventory_route(
 # ============================================
 @router.post("/import/all")
 async def import_all_route(
+    _: None = Depends(require_admin),
     detail_file: UploadFile = File(None),
     summary_file: UploadFile = File(None),
     inventory_file: UploadFile = File(None),

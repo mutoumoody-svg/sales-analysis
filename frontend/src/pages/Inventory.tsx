@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Row, Col, Card, Statistic, Table, Tag, Progress, Input, Spin, Segmented, Tabs, Tooltip, Select, Space, Button, Empty, Alert, message } from 'antd';
-import { ReloadOutlined, ClearOutlined, DownloadOutlined, RiseOutlined, FallOutlined, MinusOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
+import { ClearOutlined, DownloadOutlined, RiseOutlined, FallOutlined, MinusOutlined, SyncOutlined, ApiOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { Resizable } from 'react-resizable';
 import 'react-resizable/css/styles.css';
 import { inventoryApi, exportApi } from '../api';
 import { standardPagination } from '../utils/tableConfig';
 import { usePeriods } from '../hooks/usePeriods';
-import type { InventoryHealth, InventoryItem, InventoryAnalysis, InventoryAnalysisItem, WangdianSyncStatus } from '../types';
+import type { InventoryHealth, InventoryAnalysis, InventoryAnalysisItem, WangdianSyncStatus } from '../types';
 import { formatCurrency, formatNumber } from '../utils/format';
 
 // ============ 可拖拽列宽的表头 ============
@@ -49,13 +49,6 @@ const ResizableHeader: React.FC<ResizableHeaderProps> = ({ width, onResize, ...r
       <th {...(restProps as React.ThHTMLAttributes<HTMLTableCellElement>)} style={{ position: 'relative', ...((restProps as { style?: React.CSSProperties }).style || {}) }} />
     </Resizable>
   );
-};
-
-const riskConfig: Record<string, { color: string; label: string; tagColor: string }> = {
-  stockout: { color: '#ff4d4f', label: '缺货', tagColor: 'red' },
-  low_stock: { color: '#fa8c16', label: '低库存', tagColor: 'orange' },
-  overstock: { color: '#1677ff', label: '积压', tagColor: 'blue' },
-  healthy: { color: '#52c41a', label: '健康', tagColor: 'green' },
 };
 
 const statusConfig: Record<string, { color: string; label: string; tagColor: string }> = {
@@ -134,7 +127,7 @@ export default function Inventory() {
 
   // 过滤数据 —— 明细表改用 analysisData.items（包含 unit_cost/capital_occupied）
   // 注意：useMemo 必须在早返回之前，保持 hooks 调用顺序稳定
-  const allAnalysisItems = analysisData?.items || [];
+  const allAnalysisItems = useMemo(() => analysisData?.items || [], [analysisData]);
   const warehouseOptions = useMemo(
     () => Array.from(new Set(allAnalysisItems.map((i) => i.warehouse))).sort(),
     [allAnalysisItems]
@@ -393,9 +386,7 @@ export default function Inventory() {
     };
 
   // 把列定义加上可拖拽的 onHeaderCell（hooks 顺序：必须在 if(loading) return 之前）
-  const reorderColumns = useMemo(
-    () =>
-      reorderColumnDefs.map((col) => {
+  const reorderColumns = reorderColumnDefs.map((col) => {
         const dataIndex = col.dataIndex as string;
         const defaultWidth = (col.width as number | undefined) ?? 100;
         const currentWidth = reorderColumnWidths[dataIndex] ?? defaultWidth;
@@ -407,9 +398,7 @@ export default function Inventory() {
             onResize: handleReorderResize(dataIndex),
           }),
         };
-      }),
-    [reorderColumnWidths]
-  );
+      });
 
 // 触发旺店通API → sales-analysis 库存同步
   const handleSyncFromWangdian = async () => {
