@@ -11,6 +11,7 @@ import StoreChannel from './pages/StoreChannel';
 import RealTimeSales from './pages/RealTimeSales';
 import ShopDaily from './pages/ShopDaily';
 import Operations from './pages/Operations';
+import MonthlyAccounting from './pages/MonthlyAccounting';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="agents" element={<Agents />} />
         <Route path="import" element={<ImportPage />} />
         <Route path="operations" element={<Operations />} />
+        <Route path="monthly-accounting" element={<MonthlyAccounting />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

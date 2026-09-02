@@ -13,6 +13,7 @@ import {
   MenuOutlined,
   ThunderboltOutlined,
   FileTextOutlined,
+  AuditOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -33,6 +34,7 @@ const menuItems: NavItem[] = [
   { key: '/sales', icon: <ShoppingCartOutlined />, label: '销售分析', shortLabel: '销售' },
   { key: '/store-channel', icon: <ShopOutlined />, label: '店铺渠道', shortLabel: '店铺' },
   { key: '/profit', icon: <DollarOutlined />, label: '利润分析', shortLabel: '利润' },
+  { key: '/monthly-accounting', icon: <AuditOutlined />, label: '月度核算', shortLabel: '月报' },
   { key: '/inventory', icon: <HddOutlined />, label: '库存健康', shortLabel: '库存' },
   { key: '/agents', icon: <RobotOutlined />, label: 'AI决策', shortLabel: 'AI' },
   { key: '/analysis', icon: <BarChartOutlined />, label: '高级分析', shortLabel: '分析' },

@@ -147,3 +147,10 @@ export const operationsApi = {
   updatePurchasePlan: (id: string, data: Record<string, unknown>) => api.patch(`/operations/purchase-plans/${id}`, data),
   dailyAlerts: () => api.get('/operations/daily-alerts'),
 };
+
+// ===== Confirmed monthly accounting from sales.riverline.com.cn =====
+export const monthlyAccountingApi = {
+  periods: () => api.get('/monthly-accounting/periods'),
+  summary: (period: string) => api.get('/monthly-accounting/summary', { params: { period } }),
+  sync: (period: string) => api.post('/monthly-accounting/sync', null, { params: { period }, timeout: 120000 }),
+};

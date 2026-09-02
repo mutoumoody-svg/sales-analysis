@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import import_routes, sales_routes, profit_routes, inventory_routes, agent_routes, analysis_routes, export_routes, realtime_routes, trade_daily_routes, operations_routes
+from app.api import import_routes, sales_routes, profit_routes, inventory_routes, agent_routes, analysis_routes, export_routes, realtime_routes, trade_daily_routes, operations_routes, monthly_accounting_routes
 
 
 @asynccontextmanager
@@ -49,6 +49,7 @@ app.include_router(export_routes.router, prefix=settings.API_V1_PREFIX, tags=["E
 app.include_router(realtime_routes.router, prefix=settings.API_V1_PREFIX, tags=["Realtime"])
 app.include_router(trade_daily_routes.router, prefix=settings.API_V1_PREFIX, tags=["ShopDaily"])
 app.include_router(operations_routes.router, prefix=settings.API_V1_PREFIX, tags=["Operations"])
+app.include_router(monthly_accounting_routes.router, prefix=settings.API_V1_PREFIX, tags=["Monthly Accounting"])
 
 
 @app.get("/")

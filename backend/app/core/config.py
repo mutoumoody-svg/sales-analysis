@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Kucun 输出目录（旺店通每日出库 JSON 数据）
     KUCUN_OUTPUT_PATH: str = "/opt/kucun/output"
+    SALES_AGENT_DATA_PATH: str = ""
 
     # 旺店通开放平台 API
     WANGDIAN_SID: str = ""
