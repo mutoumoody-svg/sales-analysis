@@ -19,6 +19,7 @@ env/
 ENV/
 
 # Environment files
+.merge-sales-agent/
 .env
 .envrc
 
