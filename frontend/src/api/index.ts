@@ -153,4 +153,13 @@ export const monthlyAccountingApi = {
   periods: () => api.get('/monthly-accounting/periods'),
   summary: (period: string) => api.get('/monthly-accounting/summary', { params: { period } }),
   sync: (period: string) => api.post('/monthly-accounting/sync', null, { params: { period }, timeout: 120000 }),
+  importMonth: (period: string, detailFile: File, summaryFile: File) => {
+    const form = new FormData();
+    form.append('period', period); form.append('detail_file', detailFile); form.append('summary_file', summaryFile);
+    return api.post('/monthly-accounting/import', form, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000 });
+  },
+  updateFees: (storeId: string, data: Record<string, number>) => api.patch(`/monthly-accounting/stores/${storeId}/fees`, data),
+  confirm: (period: string) => api.post('/monthly-accounting/confirm', null, { params: { period } }),
+  year: (year: number) => api.get('/monthly-accounting/year', { params: { year } }),
+  export: (period: string) => api.get('/monthly-accounting/export', { params: { period }, responseType: 'blob' }),
 };

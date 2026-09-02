@@ -46,11 +46,7 @@ def available_source_periods() -> list[str]:
     return sorted(set(periods))
 
 
-def sync_period(db: Session, period: str) -> MonthlyAccountingBatch:
-    path = results_file(period)
-    if not path.is_file():
-        raise FileNotFoundError(f"monthly result not found: {period}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def save_payload(db: Session, period: str, payload: dict, status: str = "confirmed") -> MonthlyAccountingBatch:
     if not isinstance(payload, dict) or not payload:
         raise ValueError("monthly result is empty or invalid")
 
@@ -99,9 +95,16 @@ def sync_period(db: Session, period: str) -> MonthlyAccountingBatch:
     batch.cost = totals["cost"]
     batch.gross_profit = totals["gross"]
     batch.operating_profit = totals["operating"]
-    batch.status = "confirmed"
+    batch.status = status
     batch.synced_at = datetime.utcnow()
     db.commit()
     db.refresh(batch)
     return batch
 
+
+def sync_period(db: Session, period: str) -> MonthlyAccountingBatch:
+    path = results_file(period)
+    if not path.is_file():
+        raise FileNotFoundError(f"monthly result not found: {period}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return save_payload(db, period, payload, status="confirmed")
