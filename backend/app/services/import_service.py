@@ -538,7 +538,9 @@ def import_sales_summary(
 
             # 系统成本优先：有系统成本时用系统成本覆盖旺店通成本/利润
             if product.unit_cost is not None and product.unit_cost > 0:
-                uc = product.unit_cost
+                # SQLAlchemy Numeric returns Decimal while imported Excel amounts
+                # are floats. Normalize to float before arithmetic.
+                uc = float(product.unit_cost)
                 data["total_cost"] = round(uc * data["ship_qty"], 2)
                 data["return_cost"] = round(uc * data["return_qty"], 2)
                 data["net_cost"] = round(uc * data["net_qty"], 2)
