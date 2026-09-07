@@ -23,6 +23,8 @@ interface PurchasePlan {
 interface DailyAlert { id: string; agent_type: string; priority: string; recommendation: string; created_at: string }
 interface ProductOption { id: string; sku: string; product_name: string }
 interface StoreOption { id: string; store_name: string; channel?: string }
+interface IntegrationCheck { key: string; label: string; value?: string; healthy: boolean }
+interface IntegrationStatus { overall: 'healthy' | 'attention'; checked_at: string; expected_closed_period: string; checks: IntegrationCheck[] }
 
 const issueNames: Record<string, string> = {
   missing_cost: '缺少成本', missing_brand: '缺少品牌', missing_category: '缺少分类', negative_inventory: '负库存',
@@ -31,6 +33,7 @@ const issueNames: Record<string, string> = {
 export default function Operations() {
   const [loading, setLoading] = useState(false);
   const [quality, setQuality] = useState<QualityData | null>(null);
+  const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
   const [costs, setCosts] = useState<CostRecord[]>([]);
   const [plans, setPlans] = useState<PurchasePlan[]>([]);
   const [alerts, setAlerts] = useState<DailyAlert[]>([]);
@@ -45,10 +48,10 @@ export default function Operations() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [q, c, p, a] = await Promise.all([
-        operationsApi.quality(), operationsApi.costs(), operationsApi.purchasePlans(), operationsApi.dailyAlerts(),
+      const [q, c, p, a, i] = await Promise.all([
+        operationsApi.quality(), operationsApi.costs(), operationsApi.purchasePlans(), operationsApi.dailyAlerts(), operationsApi.integrationStatus(),
       ]);
-      setQuality(q.data.data); setCosts(c.data.data); setPlans(p.data.data); setAlerts(a.data.data);
+      setQuality(q.data.data); setCosts(c.data.data); setPlans(p.data.data); setAlerts(a.data.data); setIntegration(i.data.data);
     } catch (error) {
       message.error(`运营数据加载失败：${error instanceof Error ? error.message : '未知错误'}`);
     } finally { setLoading(false); }
@@ -116,6 +119,10 @@ export default function Operations() {
   return <div style={{ padding: 24 }}>
     <Title level={3}>运营设置与数据治理</Title>
     <Alert showIcon type="info" message="写操作需要管理员密钥。密钥只保存在当前浏览器会话，不会写入前端代码。" action={<Space><Input.Password prefix={<KeyOutlined />} value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="X-Admin-Key" /><Button onClick={saveKey}>保存</Button></Space>} />
+    <Card style={{ marginTop: 16 }} title="系统对接状态" extra={<Tag color={integration?.overall === 'healthy' ? 'green' : 'red'}>{integration?.overall === 'healthy' ? '全部正常' : '需要处理'}</Tag>}>
+      <Row gutter={[12, 12]}>{(integration?.checks || []).map((item) => <Col xs={12} md={8} lg={4} key={item.key}><Card size="small"><Statistic title={item.label} value={item.value || '无数据'} valueStyle={{ fontSize: 18, color: item.healthy ? '#389e0d' : '#cf1322' }} /><Tag color={item.healthy ? 'green' : 'red'}>{item.healthy ? '正常' : '异常/过期'}</Tag></Card></Col>)}</Row>
+      <Text type="secondary">上个应结月份：{integration?.expected_closed_period || '-'}；检查时间：{integration?.checked_at ? dayjs(integration.checked_at).format('YYYY-MM-DD HH:mm') : '-'}</Text>
+    </Card>
     <Tabs style={{ marginTop: 16 }} items={[
       { key: 'quality', label: '数据质量', children: <>
         <Row gutter={16}><Col span={6}><Card><Statistic title="质量评分" value={quality?.score || 0} suffix="/100" /></Card></Col>{issueCards.map((i) => <Col span={4} key={i.code}><Card><Statistic title={issueNames[i.code] || i.code} value={i.count} valueStyle={{ color: i.severity === 'high' ? '#cf1322' : undefined }} /></Card></Col>)}</Row>

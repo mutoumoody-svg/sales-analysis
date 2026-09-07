@@ -16,7 +16,13 @@ from app.core.security import require_admin
 from app.database import get_db
 from app.models.monthly_accounting import MonthlyAccountingBatch, MonthlyAccountingStore
 from app.models.sales_summary import SalesSummary
-from app.services.monthly_accounting_service import available_source_periods, save_payload, sync_period
+from app.services.monthly_accounting_service import (
+    available_source_periods,
+    save_payload,
+    stage_summary_file,
+    sync_operational_summary,
+    sync_period,
+)
 from app.services.monthly_close_engine import analyze_wdt_pair
 
 router = APIRouter()
@@ -62,9 +68,10 @@ def periods(db: Session = Depends(get_db)):
 def sync(period: str, db: Session = Depends(get_db)):
     try:
         batch = sync_period(db, period)
+        operational = sync_operational_summary(db, period)
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {"status": "success", "data": _batch_dict(batch)}
+    return {"status": "success", "data": _batch_dict(batch), "operational_import": operational}
 
 
 @router.post("/monthly-accounting/import", dependencies=[Depends(require_admin)])
@@ -83,6 +90,7 @@ async def import_month(
             handle.write(await summary_file.read())
         payload = analyze_wdt_pair(detail_path, summary_path, period)
         batch = save_payload(db, period, payload, status="draft")
+        stage_summary_file(period, summary_path)
         return {"status": "success", "data": _batch_dict(batch), "message": "双文件核算完成，请检查费用后确认月报"}
     except ValueError as exc:
         db.rollback()
@@ -117,9 +125,14 @@ def confirm(period: str, db: Session = Depends(get_db)):
     batch = db.query(MonthlyAccountingBatch).filter_by(period=period).first()
     if not batch:
         raise HTTPException(404, "Monthly accounting period not found")
-    batch.status = "confirmed"
-    db.commit()
-    return {"status": "success", "data": _batch_dict(batch)}
+    try:
+        operational = sync_operational_summary(db, period)
+        batch.status = "confirmed"
+        db.commit()
+    except (FileNotFoundError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(400, f"月报尚未确认：运营销售汇总导入失败：{exc}") from exc
+    return {"status": "success", "data": _batch_dict(batch), "operational_import": operational}
 
 
 @router.get("/monthly-accounting/year")

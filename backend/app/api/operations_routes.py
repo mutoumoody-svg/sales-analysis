@@ -3,6 +3,7 @@
 import calendar
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from app.core.security import require_admin
 from app.database import get_db
 from app.models.ai_recommendation import AIRecommendation
 from app.models.inventory import Inventory
+from app.models.monthly_accounting import MonthlyAccountingBatch
 from app.models.product import Product
 from app.models.purchase_plan import PurchasePlan
 from app.models.sales_summary import SalesSummary
@@ -25,6 +27,18 @@ from app.services.reorder_service import calculate_reorder
 from app.utils.period import resolve_period
 
 router = APIRouter()
+
+
+def _latest_json_date(directory: Path) -> date | None:
+    if not directory.is_dir():
+        return None
+    dates = []
+    for path in directory.glob("*.json"):
+        try:
+            dates.append(date.fromisoformat(path.stem[:10]))
+        except ValueError:
+            continue
+    return max(dates) if dates else None
 
 
 class CostUpsert(BaseModel):
@@ -174,6 +188,41 @@ def data_quality(month: str | None = None, db: Session = Depends(get_db)):
             {"code": "missing_category", "severity": "low", "count": unknown_category},
             {"code": "negative_inventory", "severity": "high", "count": nonpositive_inventory},
         ],
+    }}
+
+
+@router.get("/operations/integration-status")
+def integration_status(db: Session = Depends(get_db)):
+    """Report whether inventory, operational sales and confirmed month close are fresh."""
+    today = date.today()
+    latest_inventory = db.query(func.max(Inventory.date)).scalar()
+    latest_sales_period = db.query(func.max(SalesSummary.period)).scalar()
+    latest_confirmed_period = db.query(func.max(MonthlyAccountingBatch.period)).filter(
+        MonthlyAccountingBatch.status == "confirmed"
+    ).scalar()
+    realtime_date = _latest_json_date(Path("/opt/kucun/output/daily_outbound"))
+    trade_date = _latest_json_date(Path("/opt/sales-analysis/output/trade_daily"))
+
+    first_this_month = today.replace(day=1)
+    previous_month_end = first_this_month.fromordinal(first_this_month.toordinal() - 1)
+    expected_closed_period = previous_month_end.strftime("%Y-%m")
+    checks = [
+        {"key": "inventory", "label": "旺店通库存", "value": latest_inventory.isoformat() if latest_inventory else None,
+         "healthy": bool(latest_inventory and (today - latest_inventory).days <= 1)},
+        {"key": "realtime_sales", "label": "实时出库销售", "value": realtime_date.isoformat() if realtime_date else None,
+         "healthy": bool(realtime_date and (today - realtime_date).days <= 1)},
+        {"key": "shop_daily", "label": "店铺订单日报", "value": trade_date.isoformat() if trade_date else None,
+         "healthy": bool(trade_date and (today - trade_date).days <= 1)},
+        {"key": "operational_sales", "label": "运营销售汇总", "value": latest_sales_period,
+         "healthy": bool(latest_sales_period and latest_sales_period >= expected_closed_period)},
+        {"key": "monthly_accounting", "label": "确认销售月报", "value": latest_confirmed_period,
+         "healthy": bool(latest_confirmed_period and latest_confirmed_period >= expected_closed_period)},
+    ]
+    return {"status": "success", "data": {
+        "overall": "healthy" if all(item["healthy"] for item in checks) else "attention",
+        "checked_at": datetime.now().isoformat(),
+        "expected_closed_period": expected_closed_period,
+        "checks": checks,
     }}
 
 

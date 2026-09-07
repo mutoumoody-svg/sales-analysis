@@ -137,6 +137,7 @@ export const shopDailyApi = {
 
 // ===== Operations governance =====
 export const operationsApi = {
+  integrationStatus: () => api.get('/operations/integration-status'),
   quality: (params?: Record<string, unknown>) => api.get('/operations/data-quality', { params }),
   costs: (params?: Record<string, unknown>) => api.get('/operations/costs', { params }),
   saveCost: (data: Record<string, unknown>) => api.post('/operations/costs', data),

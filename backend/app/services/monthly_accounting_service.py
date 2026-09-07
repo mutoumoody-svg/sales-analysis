@@ -1,6 +1,7 @@
 """Synchronize confirmed month results produced by the legacy sales dashboard."""
 
 import json
+import shutil
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.monthly_accounting import MonthlyAccountingBatch, MonthlyAccountingStore
+from app.services.import_service import import_sales_summary
 
 
 def _money(value) -> Decimal:
@@ -32,6 +34,39 @@ def results_file(period: str) -> Path:
     if not base:
         raise FileNotFoundError("SALES_AGENT_DATA_PATH is not configured")
     return Path(base) / f"results_{period.replace('-', '')}.json"
+
+
+def source_summary_file(period: str) -> Path:
+    """Return the persisted WDT summary source used for operational analytics."""
+    token = period.replace("-", "")
+    base = Path(settings.SALES_AGENT_DATA_PATH.strip())
+    staged = base / "monthly_sources" / f"{token}_wdt_summary.xlsx"
+    if staged.is_file():
+        return staged
+    legacy = base / "uploads" / f"{token}_wdt_summary.xlsx"
+    if legacy.is_file():
+        return legacy
+    raise FileNotFoundError(f"WDT summary source not found: {period}")
+
+
+def stage_summary_file(period: str, source_path: str | Path) -> Path:
+    """Persist an uploaded summary until the draft monthly close is confirmed."""
+    token = period.replace("-", "")
+    base = Path(settings.SALES_AGENT_DATA_PATH.strip())
+    target = base / "monthly_sources" / f"{token}_wdt_summary.xlsx"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(".xlsx.tmp")
+    shutil.copyfile(source_path, temporary)
+    temporary.replace(target)
+    return target
+
+
+def sync_operational_summary(db: Session, period: str) -> dict:
+    """Import the exact WDT store x SKU summary after monthly confirmation."""
+    result = import_sales_summary(db, str(source_summary_file(period)), period=period)
+    if result.errors:
+        raise ValueError("; ".join(result.errors[:5]))
+    return result.to_dict()
 
 
 def available_source_periods() -> list[str]:

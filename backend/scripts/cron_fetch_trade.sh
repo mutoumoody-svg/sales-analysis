@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 cd /home/ubuntu/sales-analysis
 YESTERDAY=$(date -d 'yesterday' +%Y-%m-%d)
 REFUND_START=$(date -d 'yesterday -30 days' +%Y-%m-%d)
