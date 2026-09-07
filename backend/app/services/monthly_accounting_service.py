@@ -40,12 +40,24 @@ def source_summary_file(period: str) -> Path:
     """Return the persisted WDT summary source used for operational analytics."""
     token = period.replace("-", "")
     base = Path(settings.SALES_AGENT_DATA_PATH.strip())
-    staged = base / "monthly_sources" / f"{token}_wdt_summary.xlsx"
-    if staged.is_file():
-        return staged
-    legacy = base / "uploads" / f"{token}_wdt_summary.xlsx"
-    if legacy.is_file():
-        return legacy
+    candidates = [
+        base / "monthly_sources" / f"{token}_wdt_summary.xlsx",
+        # The legacy sales application historically used reversed orders/summary
+        # filenames for some months, so detect the workbook by its columns.
+        base / "uploads" / f"{token}_wdt_orders.xlsx",
+        base / "uploads" / f"{token}_wdt_summary.xlsx",
+    ]
+    required = {"店铺", "货品编号", "发货总量", "实际销售额", "实际总成本"}
+    import pandas as pd
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            columns = set(pd.read_excel(candidate, nrows=0).columns)
+        except Exception:
+            continue
+        if required.issubset(columns):
+            return candidate
     raise FileNotFoundError(f"WDT summary source not found: {period}")
 
 
