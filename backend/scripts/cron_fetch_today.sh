@@ -3,6 +3,15 @@ set -euo pipefail
 # 日内刷新：抓取当天出库明细 + 三品牌订单 + 当天退款，每次运行覆盖更新当天文件
 # 用途：让实时销售页/店铺日报当天数据准实时可见（延迟约1小时）
 cd /home/ubuntu/sales-analysis
+for name in WANGDIAN_SID WANGDIAN_APPKEY WANGDIAN_APPSECRET; do
+  value=$(sed -n "s/^${name}=//p" .env | tail -n 1)
+  if [ -z "$value" ]; then
+    echo "Missing $name in .env" >&2
+    exit 1
+  fi
+  printf -v "$name" '%s' "$value"
+  export "$name"
+done
 TODAY=$(date +%Y-%m-%d)
 LOG=/tmp/cron_fetch_today.log
 echo "[$(date "+%Y-%m-%d %H:%M:%S")] === 日内刷新 $TODAY ===" >> "$LOG"
