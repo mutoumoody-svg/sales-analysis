@@ -15,6 +15,8 @@ import {
   FileTextOutlined,
   AuditOutlined,
   SettingOutlined,
+  CalendarOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 import { useIsMobile } from '../hooks/useIsMobile';
 
@@ -35,11 +37,13 @@ const menuItems: NavItem[] = [
   { key: '/store-channel', icon: <ShopOutlined />, label: '店铺渠道', shortLabel: '店铺' },
   { key: '/profit', icon: <DollarOutlined />, label: '利润分析', shortLabel: '利润' },
   { key: '/monthly-accounting', icon: <AuditOutlined />, label: '月度核算', shortLabel: '月报' },
+  { key: '/annual-sales', icon: <CalendarOutlined />, label: '年度销售', shortLabel: '年度' },
   { key: '/inventory', icon: <HddOutlined />, label: '库存健康', shortLabel: '库存' },
   { key: '/agents', icon: <RobotOutlined />, label: 'AI决策', shortLabel: 'AI' },
   { key: '/analysis', icon: <BarChartOutlined />, label: '高级分析', shortLabel: '分析' },
   { key: '/import', icon: <CloudUploadOutlined />, label: '数据导入', shortLabel: '导入' },
   { key: '/operations', icon: <SettingOutlined />, label: '运营设置', shortLabel: '设置' },
+  { key: '/product-master', icon: <DatabaseOutlined />, label: '商品主数据', shortLabel: '商品' },
 ];
 
 // Bottom tab bar shows these 4 + a "more" button

@@ -147,6 +147,7 @@ export const operationsApi = {
   generatePurchasePlans: (params?: Record<string, unknown>) => api.post('/operations/purchase-plans/generate', null, { params, timeout: 120000 }),
   updatePurchasePlan: (id: string, data: Record<string, unknown>) => api.patch(`/operations/purchase-plans/${id}`, data),
   dailyAlerts: () => api.get('/operations/daily-alerts'),
+  updateProduct: (id: string, data: Record<string, unknown>) => api.patch(`/operations/products/${id}`, data),
 };
 
 // ===== Confirmed monthly accounting from sales.riverline.com.cn =====
@@ -162,5 +163,6 @@ export const monthlyAccountingApi = {
   updateFees: (storeId: string, data: Record<string, number>) => api.patch(`/monthly-accounting/stores/${storeId}/fees`, data),
   confirm: (period: string) => api.post('/monthly-accounting/confirm', null, { params: { period } }),
   year: (year: number) => api.get('/monthly-accounting/year', { params: { year } }),
+  yearDetail: (year: number) => api.get('/monthly-accounting/year-detail', { params: { year } }),
   export: (period: string) => api.get('/monthly-accounting/export', { params: { period }, responseType: 'blob' }),
 };

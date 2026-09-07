@@ -94,7 +94,7 @@ export default function MonthlyAccounting() {
   ];
 
   return <div className="page-container">
-    <Alert showIcon type="info" icon={<SafetyCertificateOutlined />} message="月度核算口径（公司正式月报）" description="本页直接同步 sales.riverline.com.cn 已完成核算的结果，包含退货扣减、成本、广告、平台费、税费和仓储快递费。原有销售分析保留为实时经营口径。" style={{ marginBottom: 16 }} />
+    <Alert showIcon type="info" icon={<SafetyCertificateOutlined />} message="统一月度核算（公司正式月报）" description="销售出库明细与货品销售汇总在这里统一导入，包含退货扣减、成本、广告、平台费、税费和仓储快递费；确认后自动供销售、利润、年度和库存分析共同使用。" style={{ marginBottom: 16 }} />
     <Card title="统一月度数据导入" size="small" style={{ marginBottom: 16 }}>
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12}><Upload.Dragger accept=".xlsx,.xls" maxCount={1} beforeUpload={(file) => { setDetailFile(file); return false; }} onRemove={() => { setDetailFile(undefined); }} fileList={detailFile ? [detailFile as never] : []}><p><InboxOutlined /></p><b>销售出库明细</b><p>主销售数据（约94列）</p></Upload.Dragger></Col>

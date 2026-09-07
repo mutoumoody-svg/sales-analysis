@@ -125,6 +125,8 @@ def list_products(
                 "product_name": p.product_name,
                 "category": p.category,
                 "brand": p.brand,
+                "unit_cost": float(p.unit_cost) if p.unit_cost is not None else None,
+                "status": p.status,
             }
             for p in results
         ],

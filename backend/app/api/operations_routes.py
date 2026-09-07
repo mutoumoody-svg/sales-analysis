@@ -66,6 +66,34 @@ class PurchaseUpdate(BaseModel):
     expected_date: date | None = None
 
 
+class ProductMasterUpdate(BaseModel):
+    product_name: str | None = Field(default=None, min_length=1, max_length=300)
+    brand: str | None = Field(default=None, max_length=100)
+    category: str | None = Field(default=None, max_length=100)
+    unit_cost: Decimal | None = Field(default=None, ge=0)
+    status: Literal["active", "discontinued"] | None = None
+
+
+@router.patch("/operations/products/{product_id}", dependencies=[Depends(require_admin)])
+def update_product_master(product_id: UUID, payload: ProductMasterUpdate, db: Session = Depends(get_db)):
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(404, "Product not found")
+    changes = payload.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        if field in {"brand", "category"} and isinstance(value, str):
+            value = value.strip() or None
+        setattr(product, field, value)
+    db.commit()
+    db.refresh(product)
+    return {"status": "success", "data": {
+        "id": str(product.id), "sku": product.sku, "product_name": product.product_name,
+        "brand": product.brand, "category": product.category,
+        "unit_cost": float(product.unit_cost) if product.unit_cost is not None else None,
+        "product_status": product.status,
+    }}
+
+
 @router.get("/operations/costs")
 def list_costs(
     product_id: UUID | None = None,

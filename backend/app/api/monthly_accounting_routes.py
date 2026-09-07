@@ -141,6 +141,32 @@ def year_summary(year: int, db: Session = Depends(get_db)):
     return {"status": "success", "data": [_batch_dict(batch) for batch in batches]}
 
 
+@router.get("/monthly-accounting/year-detail")
+def year_detail(year: int, db: Session = Depends(get_db)):
+    batches = db.query(MonthlyAccountingBatch).filter(
+        MonthlyAccountingBatch.period.like(f"{year}-%")
+    ).order_by(MonthlyAccountingBatch.period).all()
+    batch_ids = [batch.id for batch in batches]
+    stores = []
+    if batch_ids:
+        rows = db.query(MonthlyAccountingStore, MonthlyAccountingBatch.period).join(
+            MonthlyAccountingBatch, MonthlyAccountingStore.batch_id == MonthlyAccountingBatch.id
+        ).filter(MonthlyAccountingStore.batch_id.in_(batch_ids)).order_by(
+            MonthlyAccountingBatch.period, MonthlyAccountingStore.revenue.desc()
+        ).all()
+        stores = [{
+            "period": period, "store_name": row.store_name, "platform": row.platform,
+            "revenue": float(row.revenue), "cost": float(row.cost),
+            "gross_profit": float(row.gross_profit), "ad_fee": float(row.ad_fee),
+            "platform_fee": float(row.platform_fee), "tax_fee": float(row.tax_fee),
+            "logistics_fee": float(row.logistics_fee), "operating_profit": float(row.operating_profit),
+            "order_count": row.order_count, "sales_qty": row.sales_qty,
+        } for row, period in rows]
+    return {"status": "success", "data": {
+        "year": year, "months": [_batch_dict(batch) for batch in batches], "stores": stores,
+    }}
+
+
 @router.get("/monthly-accounting/export")
 def export_month(period: str, db: Session = Depends(get_db)):
     batch = db.query(MonthlyAccountingBatch).filter_by(period=period).first()

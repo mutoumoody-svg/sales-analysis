@@ -12,6 +12,8 @@ import RealTimeSales from './pages/RealTimeSales';
 import ShopDaily from './pages/ShopDaily';
 import Operations from './pages/Operations';
 import MonthlyAccounting from './pages/MonthlyAccounting';
+import AnnualSales from './pages/AnnualSales';
+import ProductMaster from './pages/ProductMaster';
 
 export default function App() {
   return (
@@ -29,6 +31,8 @@ export default function App() {
         <Route path="import" element={<ImportPage />} />
         <Route path="operations" element={<Operations />} />
         <Route path="monthly-accounting" element={<MonthlyAccounting />} />
+        <Route path="annual-sales" element={<AnnualSales />} />
+        <Route path="product-master" element={<ProductMaster />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
