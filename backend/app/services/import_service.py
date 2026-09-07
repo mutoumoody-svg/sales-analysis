@@ -466,6 +466,7 @@ def import_sales_summary(
 
     store_cache = {}
     product_cache = {}
+    summary_cache = {}
 
     for idx, row in df.iterrows():
         try:
@@ -502,12 +503,17 @@ def import_sales_summary(
                 continue
 
             # 检查是否已存在（upsert: store_id + product_id + period）
-            stmt = select(SalesSummary).where(
-                SalesSummary.store_id == store.id,
-                SalesSummary.product_id == product.id,
-                SalesSummary.period == period,
-            )
-            existing = db.execute(stmt).scalar_one_or_none()
+            summary_key = (store.id, product.id, period)
+            duplicate_in_file = summary_key in summary_cache
+            if duplicate_in_file:
+                existing = summary_cache[summary_key]
+            else:
+                stmt = select(SalesSummary).where(
+                    SalesSummary.store_id == store.id,
+                    SalesSummary.product_id == product.id,
+                    SalesSummary.period == period,
+                )
+                existing = db.execute(stmt).scalar_one_or_none()
 
             # 解析所有字段
             data = {
@@ -539,7 +545,19 @@ def import_sales_summary(
                 data["ship_profit"] = round(data["ship_amount"] - data["total_cost"], 2)
                 data["net_profit"] = round(data["net_amount"] - data["net_cost"], 2)
 
-            if existing:
+            if existing and duplicate_in_file:
+                additive_fields = [
+                    "ship_qty", "return_qty", "net_qty", "unshipped_refund_qty", "gift_qty",
+                    "ship_amount", "return_amount", "net_amount", "unshipped_refund_amount",
+                    "total_cost", "return_cost", "net_cost", "commission_cost",
+                    "unknown_cost_sales", "ship_profit", "net_profit",
+                ]
+                for field in additive_fields:
+                    setattr(existing, field, (getattr(existing, field) or 0) + (data[field] or 0))
+                existing.avg_price = (
+                    existing.net_amount / existing.net_qty if existing.net_qty else None
+                )
+            elif existing:
                 # 更新已有记录
                 for k, v in data.items():
                     setattr(existing, k, v)
@@ -553,7 +571,10 @@ def import_sales_summary(
                     **data,
                 )
                 db.add(summary)
+                existing = summary
                 result.summary_records += 1
+
+            summary_cache[summary_key] = existing
 
             result.processed += 1
 
