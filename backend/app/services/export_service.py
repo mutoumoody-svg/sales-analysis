@@ -308,6 +308,9 @@ class ExportService:
     }
 
     PRODUCT_HEADERS = {
+        "store_id": "店铺ID",
+        "store_name": "店铺名称",
+        "platform": "平台",
         "product_id": "商品ID",
         "sku": "SKU",
         "product_name": "商品名称",
@@ -491,7 +494,7 @@ class ExportService:
 
         if by_product:
             headers, new_rows = self._translate_rows(by_product, self.PRODUCT_HEADERS)
-            self._write_sheet(wb, "按商品", headers, new_rows)
+            self._write_sheet(wb, "店铺商品明细", headers, new_rows)
 
         if daily_trend:
             headers, new_rows = self._translate_rows(daily_trend, self.DAILY_TREND_HEADERS)

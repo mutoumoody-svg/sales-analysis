@@ -106,7 +106,9 @@ def export_sales(
     overview = _extract_data(sales_routes.sales_overview(brand=brand, month=month, db=db))
     by_store_result = _extract_data(sales_routes.sales_by_store(start_date=None, end_date=None, brand=brand, month=month, limit=500, db=db))
     by_store = by_store_result.get("stores", []) if isinstance(by_store_result, dict) else []
-    by_product_result = _extract_data(sales_routes.sales_by_product(start_date=None, end_date=None, store_id=None, brand=brand, month=month, limit=200, db=db))
+    by_product_result = _extract_data(
+        sales_routes.sales_product_detail_by_store(brand=brand, month=month, db=db)
+    )
     by_product = by_product_result.get("products", []) if isinstance(by_product_result, dict) else []
     daily_result = _extract_data(sales_routes.sales_daily_trend(start_date=None, end_date=None, store_id=None, brand=brand, month=month, db=db))
     daily_trend = daily_result.get("daily", []) if isinstance(daily_result, dict) else []

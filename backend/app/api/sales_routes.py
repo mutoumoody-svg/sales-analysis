@@ -462,6 +462,78 @@ def sales_by_product(
     }
 
 
+def sales_product_detail_by_store(
+    *,
+    brand: Optional[str],
+    month: Optional[str],
+    db: Session,
+) -> Dict:
+    """按店铺×商品返回完整销售明细，供 Excel 导出使用。"""
+    period = resolve_period(db, month)
+    query = (
+        db.query(
+            Store.id.label("store_id"),
+            Store.store_name,
+            Store.platform,
+            Product.id.label("product_id"),
+            Product.sku,
+            Product.product_name,
+            Product.category,
+            Product.brand,
+            func.sum(SalesSummary.ship_qty).label("ship_qty"),
+            func.sum(SalesSummary.return_qty).label("return_qty"),
+            func.sum(SalesSummary.net_qty).label("total_qty"),
+            func.sum(SalesSummary.net_amount).label("total_revenue"),
+            func.sum(SalesSummary.net_cost).label("total_cost"),
+            func.sum(SalesSummary.net_profit).label("gross_profit"),
+        )
+        .join(Store, SalesSummary.store_id == Store.id)
+        .join(Product, SalesSummary.product_id == Product.id)
+        .filter(SalesSummary.period == period)
+        .group_by(
+            Store.id,
+            Store.store_name,
+            Store.platform,
+            Product.id,
+            Product.sku,
+            Product.product_name,
+            Product.category,
+            Product.brand,
+        )
+        .order_by(Store.store_name, desc("total_revenue"), Product.sku)
+    )
+    if brand:
+        query = query.filter(Product.brand == brand)
+
+    products = []
+    for row in query.all():
+        revenue = float(row.total_revenue or 0)
+        cost = float(row.total_cost or 0)
+        profit = float(row.gross_profit or 0)
+        products.append({
+            "store_id": str(row.store_id),
+            "store_name": row.store_name,
+            "platform": row.platform,
+            "product_id": str(row.product_id),
+            "sku": row.sku,
+            "product_name": row.product_name,
+            "category": row.category,
+            "brand": row.brand,
+            "ship_qty": int(row.ship_qty or 0),
+            "return_qty": int(row.return_qty or 0),
+            "total_qty": int(row.total_qty or 0),
+            "total_revenue": revenue,
+            "total_cost": cost,
+            "gross_profit": profit,
+            "gross_margin_pct": round(profit / revenue * 100, 2) if revenue > 0 else 0,
+        })
+
+    return {
+        "status": "success",
+        "data": {"products": products, "total": len(products), "period": period},
+    }
+
+
 @router.get("/sales/daily-trend")
 def sales_daily_trend(
     start_date: Optional[date] = Query(None, description="开始日期"),
