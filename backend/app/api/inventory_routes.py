@@ -78,6 +78,48 @@ def shared_inventory_sales(
     }
 
 
+@router.get("/inventory/shared-stock")
+def shared_inventory_stock(db: Session = Depends(get_db)) -> Dict:
+    """供 Kucun 等内部应用读取 Fenxi 最新 SKU 库存快照。"""
+    latest_date = db.query(func.max(Inventory.date)).scalar()
+    stock_by_sku: Dict[str, Dict] = {}
+
+    if latest_date:
+        rows = (
+            db.query(
+                Product.sku,
+                Product.product_name,
+                func.sum(Inventory.available_qty).label("available"),
+                func.sum(Inventory.reserved_qty).label("reserved"),
+                func.sum(Inventory.inbound_qty).label("inbound"),
+            )
+            .join(Product, Inventory.product_id == Product.id)
+            .filter(Inventory.date == latest_date)
+            .group_by(Product.sku, Product.product_name)
+            .all()
+        )
+        for row in rows:
+            available = int(row.available or 0)
+            reserved = int(row.reserved or 0)
+            inbound = int(row.inbound or 0)
+            stock_by_sku[row.sku] = {
+                "product_name": row.product_name,
+                "available_qty": available,
+                "reserved_qty": reserved,
+                "inbound_qty": inbound,
+                "effective_qty": available + inbound - reserved,
+            }
+
+    return {
+        "status": "success",
+        "data": {
+            "source": "fenxi.inventory",
+            "snapshot_date": latest_date.isoformat() if latest_date else None,
+            "stock_by_sku": stock_by_sku,
+        },
+    }
+
+
 # ===== 旺店通 API 库存同步 =====
 
 @router.get("/inventory/wangdian-sync-status")
