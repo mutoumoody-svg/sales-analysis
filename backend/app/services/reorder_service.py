@@ -82,7 +82,7 @@ def calculate_reorder(
             "items": [...],
         }
     """
-    # 1. 获取近4个月月份列表
+    # 1. 获取近6个月月份列表（最近月份在前）
     periods = _get_recent_periods(period, WEIGHTED_MONTHS)
 
     # 2. 查询各月各商品销量
@@ -229,8 +229,9 @@ def calculate_reorder(
 
         weighted_daily = weighted_sum / weight_total if weight_total > 0 else 0
 
-        # 4个月总销量
+        # 近6个月总销量，以及用于库存明细展示的近2个月销量
         total_sold_qty = sum(m["qty"] for m in monthly_data)
+        recent_2_months_sales = sum(m["qty"] for m in monthly_data[:2])
 
         # --- 周转天数 ---
         if weighted_daily > 0:
@@ -358,6 +359,7 @@ def calculate_reorder(
             # 旧字段兼容
             "daily_rate": round(weighted_daily, 2),
             "total_sold_qty": total_sold_qty,
+            "recent_2_months_sales": recent_2_months_sales,
             "last_sale_date": last_sale.isoformat() if last_sale else None,
             "stale_days": stale_days,
             "is_stale": is_stale,

@@ -433,6 +433,7 @@ export default function Inventory() {
   };
 
   const resetOverviewFilters = () => {
+    setSearch('');
     setWarehouseFilter([]);
     setStatusFilter('');
     setCostFilter('');
@@ -563,6 +564,24 @@ export default function Inventory() {
       title: '有效库存', dataIndex: 'effective_qty', width: 80,
       render: (v: number) => <strong>{formatNumber(v)}</strong>,
       sorter: (a: InventoryAnalysisItem, b: InventoryAnalysisItem) => a.effective_qty - b.effective_qty,
+    },
+    {
+      title: '近2月销量',
+      dataIndex: 'recent_2_months_sales',
+      width: 105,
+      render: (v: number, record: InventoryAnalysisItem) => {
+        const detail = record.monthly_sales.slice(0, 2);
+        const detailText = detail.length > 0
+          ? detail.map((m) => `${m.period}：${formatNumber(m.qty)} 件`).join('；')
+          : '暂无销售数据';
+        return (
+          <Tooltip title={detailText}>
+            <strong style={{ color: v > 0 ? '#1677ff' : '#999' }}>{formatNumber(v || 0)}</strong>
+          </Tooltip>
+        );
+      },
+      sorter: (a: InventoryAnalysisItem, b: InventoryAnalysisItem) =>
+        a.recent_2_months_sales - b.recent_2_months_sales,
     },
     {
       title: '单位成本', dataIndex: 'unit_cost', width: 100,
@@ -880,6 +899,13 @@ export default function Inventory() {
                 >
                   <Space wrap size="small" style={{ marginBottom: 12, padding: 12, background: '#fafafa', borderRadius: 6, width: '100%' }}>
                     <span style={{ color: '#999', fontSize: 12 }}>筛选：</span>
+                    <Input
+                      allowClear
+                      placeholder="搜索商品名称或SKU"
+                      style={{ width: 220 }}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
                     <Select
                       mode="multiple"
                       allowClear
@@ -924,7 +950,7 @@ export default function Inventory() {
                       value={amountBucket}
                       onChange={(v) => setAmountBucket(v as string)}
                     />
-                    {(warehouseFilter.length > 0 || statusFilter || costFilter || amountBucket) && (
+                    {(search || warehouseFilter.length > 0 || statusFilter || costFilter || amountBucket) && (
                       <span style={{ color: '#1677ff', fontSize: 12 }}>
                         ✓ 已应用筛选条件
                       </span>
@@ -936,7 +962,7 @@ export default function Inventory() {
                     rowKey={(r) => `${r.sku}-${r.warehouse}`}
                     size="small"
                     pagination={standardPagination(20)}
-                    scroll={{ x: 1200 }}
+                    scroll={{ x: 1320 }}
                     locale={{
                       emptyText: <Empty description="没有符合筛选条件的库存明细" />,
                     }}

@@ -192,6 +192,7 @@ export interface InventoryAnalysisItem {
   unit_cost: number;
   capital_occupied: number;
   total_sold_qty: number;
+  recent_2_months_sales: number;
   daily_rate: number;
   turnover_days: number | null;
   last_sale_date: string | null;
