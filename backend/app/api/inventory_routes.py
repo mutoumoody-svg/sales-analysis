@@ -29,6 +29,55 @@ from app.core.security import require_admin
 router = APIRouter()
 
 
+@router.get("/inventory/shared-sales")
+def shared_inventory_sales(
+    months: int = Query(3, ge=1, le=12, description="返回最近多少个已导入月份"),
+    through: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}$", description="可选截止月份 YYYY-MM"),
+    db: Session = Depends(get_db),
+) -> Dict:
+    """供同服务器库存系统读取的 SKU 月销量只读接口。
+
+    Fenxi 的 sales_summary 是唯一销售数据源；数量使用各店铺 net_qty 汇总，
+    与 Fenxi 库存分析的销量口径一致。接口只监听现有后端地址，Kucun
+    通过 127.0.0.1 调用，不需要重复上传月销量文件。
+    """
+    period_query = db.query(SalesSummary.period).distinct()
+    if through:
+        period_query = period_query.filter(SalesSummary.period <= through)
+    period_rows = period_query.order_by(desc(SalesSummary.period)).limit(months).all()
+    periods = [row[0] for row in period_rows if row[0]]
+
+    sales_by_sku: Dict[str, Dict] = {}
+    if periods:
+        rows = (
+            db.query(
+                Product.sku,
+                Product.product_name,
+                SalesSummary.period,
+                func.sum(SalesSummary.net_qty).label("qty"),
+            )
+            .join(Product, SalesSummary.product_id == Product.id)
+            .filter(SalesSummary.period.in_(periods))
+            .group_by(Product.sku, Product.product_name, SalesSummary.period)
+            .all()
+        )
+        for row in rows:
+            item = sales_by_sku.setdefault(
+                row.sku,
+                {"product_name": row.product_name, "months": {}},
+            )
+            item["months"][row.period] = int(row.qty or 0)
+
+    return {
+        "status": "success",
+        "data": {
+            "source": "fenxi.sales_summary",
+            "periods": periods,
+            "sales_by_sku": sales_by_sku,
+        },
+    }
+
+
 # ===== 旺店通 API 库存同步 =====
 
 @router.get("/inventory/wangdian-sync-status")
