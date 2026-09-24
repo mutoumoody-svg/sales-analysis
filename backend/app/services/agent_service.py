@@ -490,10 +490,10 @@ class InventoryAgent(BaseAgent):
             "total_capital": round(total_capital, 2),
             "inv_date": str(latest_inv_date),
         }
-        insights["stockout_skus"] = stockout_skus[:10]
-        insights["low_stock_skus"] = low_stock_skus[:10]
-        insights["stale_skus"] = stale_skus[:10]
-        insights["overstock_skus"] = overstock_skus[:10]
+        insights["stockout_skus"] = stockout_skus
+        insights["low_stock_skus"] = low_stock_skus
+        insights["stale_skus"] = stale_skus
+        insights["overstock_skus"] = overstock_skus
 
         # --- 生成建议 ---
         if stockout_count > 0:
@@ -613,7 +613,7 @@ class ProcurementAgent(BaseAgent):
                 "reorder_value": i["reorder_value"],
                 "days_of_supply": i.get("days_of_supply", 0),
             }
-            for i in urgent_reorders[:10]
+            for i in urgent_reorders
         ]
         insights["normal_reorders"] = [
             {
@@ -626,7 +626,7 @@ class ProcurementAgent(BaseAgent):
                 "reorder_value": i["reorder_value"],
                 "days_of_supply": i.get("days_of_supply", 0),
             }
-            for i in normal_reorders[:10]
+            for i in normal_reorders
         ]
 
         # --- 建议 ---
@@ -781,7 +781,7 @@ class FinanceAgent(BaseAgent):
                 "cost": round(float(r.cost), 2) if r.cost else 0,
                 "profit": round(l_profit, 2),
             })
-        insights["loss_skus"] = loss_skus[:10]
+        insights["loss_skus"] = loss_skus
         insights["total_loss"] = round(total_loss, 2)
 
         # --- 成本缺失分析 ---
@@ -789,19 +789,32 @@ class FinanceAgent(BaseAgent):
             self.db.query(
                 Product.sku,
                 Product.product_name,
+                Product.brand,
                 func.sum(SalesSummary.net_amount).label("revenue"),
                 func.sum(SalesSummary.net_qty).label("qty"),
             )
             .join(Product, SalesSummary.product_id == Product.id)
             .filter(SalesSummary.period == period)
             .filter(Product.unit_cost.is_(None))
-            .group_by(Product.sku, Product.product_name)
+            .group_by(Product.sku, Product.product_name, Product.brand)
             .order_by(desc(func.sum(SalesSummary.net_amount)))
         )
+        if brand:
+            no_cost_q = no_cost_q.filter(Product.brand == brand)
         no_cost_results = no_cost_q.all()
         no_cost_revenue = sum(float(r.revenue) if r.revenue else 0 for r in no_cost_results)
         insights["no_cost_sku_count"] = len(no_cost_results)
         insights["no_cost_revenue"] = round(no_cost_revenue, 2)
+        insights["no_cost_skus"] = [
+            {
+                "sku": r.sku,
+                "name": r.product_name,
+                "brand": r.brand,
+                "qty": int(r.qty) if r.qty else 0,
+                "revenue": round(float(r.revenue), 2) if r.revenue else 0,
+            }
+            for r in no_cost_results
+        ]
 
         # --- 建议 ---
         if gross_margin < 20:

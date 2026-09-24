@@ -56,6 +56,15 @@ export default function Agents() {
   const { periods, month, setMonth } = usePeriods();
   const [data, setData] = useState<AllAgentsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeAgent, setActiveAgent] = useState('sales');
+
+  const showAgentDetail = useCallback((agent: string, targetId: string) => {
+    setActiveAgent(agent);
+    window.setTimeout(() => {
+      const target = document.getElementById(targetId) || document.getElementById('agent-detail-tabs');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }, []);
 
   const loadData = useCallback(async (selectedBrand: BrandType, selectedMonth: string) => {
     if (!selectedMonth) return;
@@ -135,12 +144,13 @@ export default function Agents() {
         {ceo ? (
           <>
             {/* ===== CEO 汇总报告 ===== */}
-            <CEOSummary ceo={ceo} />
+            <CEOSummary ceo={ceo} onDetailClick={showAgentDetail} />
 
             {/* ===== 各 Agent 详细分析 ===== */}
-            <Card style={{ marginTop: 16 }}>
+            <Card id="agent-detail-tabs" style={{ marginTop: 16, scrollMarginTop: 16 }}>
               <Tabs
-                defaultActiveKey="sales"
+                activeKey={activeAgent}
+                onChange={setActiveAgent}
                 items={[
                   {
                     key: 'sales',
@@ -222,9 +232,23 @@ export default function Agents() {
 // ============================================================
 // CEO 汇总
 // ============================================================
-function CEOSummary({ ceo }: { ceo: CEOAgentResult }) {
+function CEOSummary({ ceo, onDetailClick }: { ceo: CEOAgentResult; onDetailClick: (agent: string, targetId: string) => void }) {
   const s = ceo.summary;
   const color = statusColor[s.overall_status] || '#1890ff';
+  const detailCardProps = (agent: string, targetId: string, label: string) => ({
+    onClick: () => onDetailClick(agent, targetId),
+    role: 'button',
+    tabIndex: 0,
+    onKeyDown: (event: React.KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onDetailClick(agent, targetId);
+      }
+    },
+    'aria-label': `点击查看${label}明细`,
+    style: { cursor: 'pointer', height: '100%' },
+    hoverable: true,
+  });
 
   return (
     <div>
@@ -261,17 +285,18 @@ function CEOSummary({ ceo }: { ceo: CEOAgentResult }) {
       {/* 核心指标卡片 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
+          <Card size="small" {...detailCardProps('inventory', 'detail-stockout', '缺货SKU')}>
             <Statistic
               title="缺货SKU"
               value={s.stockout_count}
               prefix={s.stockout_count > 0 ? <WarningOutlined style={{ color: '#ff4d4f' }} /> : undefined}
               valueStyle={{ color: s.stockout_count > 0 ? '#ff4d4f' : undefined }}
             />
+            <Text type="secondary" style={{ fontSize: 12 }}>点击查看明细</Text>
           </Card>
         </Col>
         <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
+          <Card size="small" {...detailCardProps('finance', 'detail-loss', '亏损SKU')}>
             <Statistic
               title="亏损SKU"
               value={s.loss_count}
@@ -281,46 +306,51 @@ function CEOSummary({ ceo }: { ceo: CEOAgentResult }) {
             {s.total_loss < 0 && (
               <Text type="danger" style={{ fontSize: 12 }}>合计 {formatCurrencyShort(s.total_loss)}</Text>
             )}
+            <div><Text type="secondary" style={{ fontSize: 12 }}>点击查看明细</Text></div>
           </Card>
         </Col>
         <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
+          <Card size="small" {...detailCardProps('inventory', 'detail-stale', '滞销SKU')}>
             <Statistic
               title="滞销SKU"
               value={s.stale_count}
               prefix={s.stale_count > 0 ? <WarningOutlined style={{ color: '#faad14' }} /> : undefined}
               valueStyle={{ color: s.stale_count > 0 ? '#faad14' : undefined }}
             />
+            <Text type="secondary" style={{ fontSize: 12 }}>点击查看明细</Text>
           </Card>
         </Col>
         <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
+          <Card size="small" {...detailCardProps('procurement', 'detail-urgent', '紧急补货')}>
             <Statistic
               title="紧急补货"
               value={s.urgent_reorder_count}
               suffix={s.urgent_reorder_count > 0 ? ` / ${formatCurrencyShort(s.urgent_reorder_value)}` : ''}
               valueStyle={{ color: s.urgent_reorder_count > 0 ? '#ff4d4f' : undefined }}
             />
+            <Text type="secondary" style={{ fontSize: 12 }}>点击查看明细</Text>
           </Card>
         </Col>
         <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
+          <Card size="small" {...detailCardProps('finance', 'detail-no-cost', '成本缺失')}>
             <Statistic
               title="成本缺失"
               value={s.no_cost_count}
               prefix={s.no_cost_count > 0 ? <WarningOutlined style={{ color: '#faad14' }} /> : undefined}
               valueStyle={{ color: s.no_cost_count > 0 ? '#faad14' : undefined }}
             />
+            <Text type="secondary" style={{ fontSize: 12 }}>点击查看明细</Text>
           </Card>
         </Col>
         <Col xs={12} sm={8} md={6} lg={4}>
-          <Card size="small">
+          <Card size="small" {...detailCardProps('operation', 'detail-discount', '折扣')}>
             <Statistic
               title="折扣率"
               value={s.discount_rate.toFixed(1)}
               suffix="%"
               valueStyle={{ color: s.discount_rate > 20 ? '#ff4d4f' : undefined }}
             />
+            <Text type="secondary" style={{ fontSize: 12 }}>点击查看明细</Text>
           </Card>
         </Col>
       </Row>
@@ -580,7 +610,7 @@ function InventoryAgentView({ data }: { data: InventoryAgentResult }) {
       <Text type="secondary" style={{ fontSize: 12 }}>库存日期: {s.inv_date}</Text>
 
       {data.stockout_skus.length > 0 && (
-        <Card title={<span><Tag color="red">缺货</Tag> 缺货SKU (正在损失销售)</span>} size="small" style={{ marginTop: 16, marginBottom: 16 }}>
+        <Card id="detail-stockout" title={<span><Tag color="red">缺货</Tag> 缺货SKU (正在损失销售)</span>} size="small" style={{ marginTop: 16, marginBottom: 16, scrollMarginTop: 16 }}>
           <Table
             size="small"
             dataSource={data.stockout_skus}
@@ -600,7 +630,7 @@ function InventoryAgentView({ data }: { data: InventoryAgentResult }) {
       )}
 
       {data.stale_skus.length > 0 && (
-        <Card title={<span><Tag color="orange">滞销</Tag> 滞销SKU (资金被无效占用)</span>} size="small" style={{ marginBottom: 16 }}>
+        <Card id="detail-stale" title={<span><Tag color="orange">滞销</Tag> 滞销SKU (资金被无效占用)</span>} size="small" style={{ marginBottom: 16, scrollMarginTop: 16 }}>
           <Table
             size="small"
             dataSource={data.stale_skus}
@@ -638,9 +668,10 @@ function ProcurementAgentView({ data }: { data: ProcurementAgentResult }) {
 
       {data.urgent_reorders.length > 0 && (
         <Card
+          id="detail-urgent"
           title={<span><Tag color="red">紧急</Tag> 紧急补货清单 (7天内将缺货)</span>}
           size="small"
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 16, scrollMarginTop: 16 }}
         >
           <Table
             size="small"
@@ -731,9 +762,10 @@ function FinanceAgentView({ data }: { data: FinanceAgentResult }) {
 
       {data.loss_skus.length > 0 && (
         <Card
+          id="detail-loss"
           title={<span><Tag color="red">亏损</Tag> 亏损SKU (合计 {formatCurrencyShort(data.total_loss)})</span>}
           size="small"
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 16, scrollMarginTop: 16 }}
         >
           <Table
             size="small"
@@ -753,12 +785,35 @@ function FinanceAgentView({ data }: { data: FinanceAgentResult }) {
       )}
 
       {data.no_cost_sku_count > 0 && (
-        <Alert
-          type="error"
-          showIcon
-          message={`${data.no_cost_sku_count} 个SKU缺少成本数据，涉及销售额 ${formatCurrencyShort(data.no_cost_revenue)}，利润计算不准确！`}
-          style={{ marginBottom: 16 }}
-        />
+        <>
+          <Alert
+            type="error"
+            showIcon
+            message={`${data.no_cost_sku_count} 个SKU缺少成本数据，涉及销售额 ${formatCurrencyShort(data.no_cost_revenue)}，利润计算不准确！`}
+            style={{ marginBottom: 16 }}
+          />
+          <Card
+            id="detail-no-cost"
+            title={<span><Tag color="orange">待补成本</Tag> 成本缺失SKU明细</span>}
+            size="small"
+            style={{ marginBottom: 16, scrollMarginTop: 16 }}
+          >
+            <Table
+              size="small"
+              dataSource={data.no_cost_skus || []}
+              rowKey="sku"
+              pagination={standardPagination(10)}
+              columns={[
+                { title: 'SKU', dataIndex: 'sku', width: 110, ellipsis: true },
+                { title: '名称', dataIndex: 'name', ellipsis: true },
+                { title: '品牌', dataIndex: 'brand', width: 120, render: (v: string | null) => v || '未分类' },
+                { title: '销量', dataIndex: 'qty', width: 90, render: (v: number) => formatNumber(v) },
+                { title: '涉及销售额', dataIndex: 'revenue', width: 130, render: (v: number) => formatCurrency(v) },
+                { title: '问题', width: 110, render: () => <Tag color="orange">缺少单位成本</Tag> },
+              ]}
+            />
+          </Card>
+        </>
       )}
 
       <RecommendationList recommendations={data.recommendations} />
@@ -782,9 +837,10 @@ function OperationAgentView({ data }: { data: OperationAgentResult }) {
 
       {s.discount_amount > 0 && (
         <Alert
+          id="detail-discount"
           type={s.discount_rate > 20 ? 'warning' : 'info'}
           message={`折扣总额: ${formatCurrency(s.discount_amount)} (折扣率 ${s.discount_rate.toFixed(1)}%)`}
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 16, scrollMarginTop: 16 }}
         />
       )}
 

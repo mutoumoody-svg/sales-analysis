@@ -538,6 +538,13 @@ export interface FinanceAgentResult {
   total_loss: number;
   no_cost_sku_count: number;
   no_cost_revenue: number;
+  no_cost_skus: Array<{
+    sku: string;
+    name: string;
+    brand: string | null;
+    qty: number;
+    revenue: number;
+  }>;
   recommendations: AgentRecommendation[];
 }
 
