@@ -4,21 +4,22 @@ Reorder Service - 统一补货建议引擎.
 基于近6个月加权日均销量 + 当前库存，计算补货建议。
 
 核心参数:
-- 采购周期：60天（2个月）
-- 加权月数：6个月（越近权重越高）
-- 安全系数：周转<2个月 → 1.7（快消品需更多缓冲）；周转≥2个月 → 1.3（慢销品缓冲较少）
+- 默认采购交期60天，复查周期30天
+- 加权月数：6个完整月份（越近权重越高）
+- 默认安全天数：快消30天，慢消15天；支持SKU覆盖
 
 公式:
 - 加权日均 = Σ(各月日均 × 权重) / Σ权重，权重 = [6, 5, 4, 3, 2, 1]
 - 周转天数 = 当前可售库存 / 加权日均
-- 安全库存 = 加权日均 × 采购周期 × 安全系数
-- 补货量 = max(安全库存 + 采购周期需求 - 有效库存, 采购周期需求)
+- 再订货点 = 交期需求 + 安全库存
+- 补货量 = 目标库存 - 有效库存，再按起订量和订货倍数取整
 """
 
 from typing import Dict, List, Optional
-from datetime import date
+from datetime import date, timedelta
 from collections import defaultdict
 import calendar
+import math
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -27,15 +28,20 @@ from app.models.inventory import Inventory
 from app.models.product import Product
 from app.models.sales_summary import SalesSummary
 from app.models.order import Order, OrderItem
+from app.models.reorder_policy import ReorderPolicy
 from app.utils.period import resolve_period, period_to_date_range
 
 
 # ===== 核心常量 =====
 PROCUREMENT_DAYS = 60            # 采购周期：2个月
+REVIEW_PERIOD_DAYS = 30          # 默认复查/下单周期
 WEIGHTED_MONTHS = 6              # 加权月数
 MONTH_WEIGHTS = [6, 5, 4, 3, 2, 1]  # 加权权重：越近越高
 SAFETY_FACTOR_FAST = 1.7         # 周转<2个月（快消品）
 SAFETY_FACTOR_SLOW = 1.3         # 周转≥2个月（慢销品）
+SAFETY_DAYS_FAST = 30            # 新公式：快消品安全缓冲天数
+SAFETY_DAYS_SLOW = 15            # 新公式：慢消品安全缓冲天数
+MAX_STOCK_DAYS = 180             # 默认库存覆盖上限
 TURNOVER_THRESHOLD_DAYS = 60     # 周转阈值：2个月
 # 滞销判定
 STALE_STOCK_THRESHOLD = 50       # 库存>50件
@@ -82,8 +88,18 @@ def calculate_reorder(
             "items": [...],
         }
     """
-    # 1. 获取近6个月月份列表（最近月份在前）
-    periods = _get_recent_periods(period, WEIGHTED_MONTHS)
+    # 1. 只使用已经结束且确有月报数据的月份。比如9月尚未上传时，
+    # 自动以8月为预测截止月，不把缺失的9月当成0销量。
+    previous_month_end = date.today().replace(day=1) - timedelta(days=1)
+    last_closed_period = previous_month_end.strftime("%Y-%m")
+    period_ceiling = min(period, last_closed_period)
+    forecast_period = (
+        db.query(func.max(SalesSummary.period))
+        .filter(SalesSummary.period <= period_ceiling)
+        .scalar()
+        or period_ceiling
+    )
+    periods = _get_recent_periods(forecast_period, WEIGHTED_MONTHS)
 
     # 2. 查询各月各商品销量
     sales_query = (
@@ -168,6 +184,18 @@ def calculate_reorder(
     )
     inv_results = inv_query.all()
 
+    product_ids = [r.product_id for r in inv_results]
+    policy_rows = (
+        db.query(ReorderPolicy)
+        .filter(
+            ReorderPolicy.product_id.in_(product_ids),
+            ReorderPolicy.active.is_(True),
+        )
+        .all()
+        if product_ids else []
+    )
+    policy_map = {str(row.product_id): row for row in policy_rows}
+
     # 4. 获取每个商品最后销售日期（当前月份范围内）
     p_start, p_end = period_to_date_range(period)
     last_sale_query = (
@@ -240,25 +268,46 @@ def calculate_reorder(
         else:
             turnover_days = None
 
-        # --- 确定安全系数 ---
+        # --- 确定周转类别与SKU订货策略 ---
         if turnover_days is not None and turnover_days < TURNOVER_THRESHOLD_DAYS:
-            safety_factor = SAFETY_FACTOR_FAST
             turnover_category = "fast"
+            default_safety_days = SAFETY_DAYS_FAST
         else:
-            safety_factor = SAFETY_FACTOR_SLOW
             turnover_category = "slow"
+            default_safety_days = SAFETY_DAYS_SLOW
 
-        # --- 安全库存 ---
-        safety_stock = max(int(weighted_daily * PROCUREMENT_DAYS * safety_factor), 0)
+        policy = policy_map.get(pid)
+        lead_time_days = int(policy.lead_time_days) if policy else PROCUREMENT_DAYS
+        review_period_days = int(policy.review_period_days) if policy else REVIEW_PERIOD_DAYS
+        safety_days = int(policy.safety_days) if policy and policy.safety_days is not None else default_safety_days
+        min_order_qty = int(policy.min_order_qty) if policy else 1
+        order_multiple = int(policy.order_multiple) if policy else 1
+        max_stock_days = int(policy.max_stock_days) if policy else MAX_STOCK_DAYS
 
-        # --- 采购周期需求 ---
-        cycle_demand = int(weighted_daily * PROCUREMENT_DAYS)
+        # --- 新补货模型 ---
+        # 触发点覆盖“到货前需求 + 安全缓冲”；触发后只补到下一复查周期，
+        # 不再强制每次至少采购60天销量。
+        lead_time_demand = math.ceil(weighted_daily * lead_time_days)
+        safety_stock = math.ceil(weighted_daily * safety_days)
+        reorder_point = lead_time_demand + safety_stock
+        unconstrained_target_days = lead_time_days + review_period_days + safety_days
+        target_days = max(
+            lead_time_days + safety_days,
+            min(unconstrained_target_days, max_stock_days),
+        )
+        target_stock = math.ceil(weighted_daily * target_days)
+        raw_reorder_qty = max(0, target_stock - effective)
+        needs_reorder = weighted_daily > 0 and effective < reorder_point and raw_reorder_qty > 0
 
-        # --- 补货量 ---
-        reorder_qty = max(safety_stock + cycle_demand - effective, cycle_demand)
+        if needs_reorder:
+            reorder_qty = max(raw_reorder_qty, min_order_qty)
+            reorder_qty = math.ceil(reorder_qty / order_multiple) * order_multiple
+        else:
+            reorder_qty = 0
 
-        # 是否需要补货（有效库存低于安全库存）
-        needs_reorder = reorder_qty > 0 and effective < safety_stock
+        # 兼容旧字段名称；现在表示采购交期内需求。
+        cycle_demand = lead_time_demand
+        safety_factor = round(safety_days / lead_time_days, 2) if lead_time_days else 0
 
         # --- 优先级 ---
         days_of_supply = int(effective / weighted_daily) if weighted_daily > 0 else None
@@ -267,7 +316,7 @@ def calculate_reorder(
             if days_of_supply is not None and days_of_supply < 7:
                 priority = "urgent"
                 urgent_count += 1
-            elif days_of_supply is not None and days_of_supply < PROCUREMENT_DAYS:
+            elif days_of_supply is not None and days_of_supply < lead_time_days:
                 priority = "normal"
                 normal_count += 1
             else:
@@ -322,7 +371,7 @@ def calculate_reorder(
             status = "stale"
         elif needs_reorder:
             status = "reorder"
-        elif safety_stock > 0 and available > safety_stock * 3:
+        elif weighted_daily > 0 and available > weighted_daily * max_stock_days:
             status = "overstock"
         else:
             status = "healthy"
@@ -349,8 +398,18 @@ def calculate_reorder(
             "turnover_days": turnover_days,
             "turnover_category": turnover_category,
             "safety_factor": safety_factor,
+            "safety_days": safety_days,
             "safety_stock": safety_stock,
             "cycle_demand": cycle_demand,
+            "lead_time_days": lead_time_days,
+            "review_period_days": review_period_days,
+            "reorder_point": reorder_point,
+            "target_stock": target_stock,
+            "target_stock_days": target_days,
+            "min_order_qty": min_order_qty,
+            "order_multiple": order_multiple,
+            "max_stock_days": max_stock_days,
+            "policy_source": "sku" if policy else "default",
             "reorder_qty": reorder_qty,
             "reorder_value": round(reorder_value, 2),
             "needs_reorder": needs_reorder,
@@ -403,11 +462,18 @@ def calculate_reorder(
         "healthy_count": sum(1 for i in items if i["status"] == "healthy"),
         "periods": periods,
         "procurement_days": PROCUREMENT_DAYS,
+        "review_period_days": REVIEW_PERIOD_DAYS,
         "weighted_months": WEIGHTED_MONTHS,
         "month_weights": MONTH_WEIGHTS,
         "safety_factor_fast": SAFETY_FACTOR_FAST,
         "safety_factor_slow": SAFETY_FACTOR_SLOW,
+        "safety_days_fast": SAFETY_DAYS_FAST,
+        "safety_days_slow": SAFETY_DAYS_SLOW,
+        "max_stock_days": MAX_STOCK_DAYS,
         "turnover_threshold_days": TURNOVER_THRESHOLD_DAYS,
+        "requested_period": period,
+        "forecast_period": forecast_period,
+        "period_fallback": forecast_period != period,
         # 兼容旧字段：数据范围
         "date_span": sum(_days_in_month(p) for p in periods),
         "data_start": periods[-1] if periods else None,

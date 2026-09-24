@@ -88,7 +88,7 @@ export default function Inventory() {
   const [reorderTurnoverFilter, setReorderTurnoverFilter] = useState<string[]>([]); // fast/slow
   const [reorderTrendFilter, setReorderTrendFilter] = useState<string[]>([]); // up/down/flat
   const [reorderPriorityFilter, setReorderPriorityFilter] = useState<string[]>([]); // urgent/normal/planned
-  const [reorderSafetyFilter, setReorderSafetyFilter] = useState<string[]>([]); // 1.7/1.3
+  const [reorderSafetyFilter, setReorderSafetyFilter] = useState<string[]>([]); // 安全天数
   // 列点击触发的排序键（与 reorderSort 卡片预设共存）
   const [reorderColumnSort, setReorderColumnSort] = useState<{ key: string; order: 'ascend' | 'descend' } | null>(null);
 
@@ -201,7 +201,7 @@ export default function Inventory() {
       items = items.filter((i) => reorderPriorityFilter.includes(i.priority || ''));
     }
     if (reorderSafetyFilter.length > 0) {
-      items = items.filter((i) => reorderSafetyFilter.includes(String(i.safety_factor)));
+      items = items.filter((i) => reorderSafetyFilter.includes(String(i.safety_days)));
     }
     // 排序：列点击 > 卡片预设 > 默认（按补货量降序）
     if (reorderColumnSort) {
@@ -264,7 +264,6 @@ export default function Inventory() {
   const trendSortOrder: Record<string, number> = { down: 1, flat: 2, up: 3 };
   const turnoverCatSortOrder: Record<string, number> = { fast: 1, slow: 2 };
   const prioritySortOrder: Record<string, number> = { urgent: 1, normal: 2, planned: 3, sufficient: 4 };
-  const safetyFactorSortOrder: Record<string, number> = { '1.3': 1, '1.7': 2 };
 
   // 取列的当前 sortOrder（高亮表头排序箭头）
   const colSort = (key: string) =>
@@ -330,11 +329,10 @@ export default function Inventory() {
       sortOrder: colSort('turnover_category'),
     },
     {
-      title: '安全系数', dataIndex: 'safety_factor', width: 75,
-      render: (v: number) => <Tag color={v === 1.7 ? 'orange' : 'blue'}>{v}x</Tag>,
-      sorter: (a: InventoryAnalysisItem, b: InventoryAnalysisItem) =>
-        (safetyFactorSortOrder[String(a.safety_factor)] || 0) - (safetyFactorSortOrder[String(b.safety_factor)] || 0),
-      sortOrder: colSort('safety_factor'),
+      title: '安全天数', dataIndex: 'safety_days', width: 80,
+      render: (v: number, r: InventoryAnalysisItem) => <Tag color={r.policy_source === 'sku' ? 'purple' : (v >= 30 ? 'orange' : 'blue')}>{v}天</Tag>,
+      sorter: (a: InventoryAnalysisItem, b: InventoryAnalysisItem) => a.safety_days - b.safety_days,
+      sortOrder: colSort('safety_days'),
     },
     {
       title: '安全库存', dataIndex: 'safety_stock', width: 80,
@@ -798,6 +796,9 @@ export default function Inventory() {
             label: '库存概览',
             children: (
               <>
+                {summary?.period_fallback && (
+                  <Alert showIcon type="warning" style={{ marginBottom: 16 }} message={`所选 ${summary.requested_period} 尚无完整月报，预测自动使用截至 ${summary.forecast_period} 的最近6个完整月份；未把缺失月份按0计算。`} />
+                )}
                 <Row gutter={[16, 16]}>
                   <Col xs={24} md={6}>
                     <Card title="库存健康评分">
@@ -1143,8 +1144,8 @@ export default function Inventory() {
                       <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>补货引擎参数</div>
                       <div style={{ fontSize: 12, lineHeight: 1.8 }}>
                         <span>加权月数: <strong>{summary?.weighted_months || 6}</strong>（权重 {summary?.month_weights?.join('/') || '6/5/4/3/2/1'}）</span><br />
-                        <span>采购周期: <strong>{summary?.procurement_days || 60}</strong>天</span><br />
-                        <span>安全系数: <strong style={{ color: '#fa8c16' }}>{summary?.safety_factor_fast || 1.7}</strong>x（快消）/ <strong style={{ color: '#1677ff' }}>{summary?.safety_factor_slow || 1.3}</strong>x（慢消）</span>
+                        <span>默认交期/复查: <strong>{summary?.procurement_days || 60}</strong> / <strong>{summary?.review_period_days || 30}</strong>天</span><br />
+                        <span>默认安全天数: <strong style={{ color: '#fa8c16' }}>{summary?.safety_days_fast || 30}</strong>（快消）/ <strong style={{ color: '#1677ff' }}>{summary?.safety_days_slow || 15}</strong>（慢消）</span>
                       </div>
                     </Card>
                   </Col>
@@ -1177,10 +1178,10 @@ export default function Inventory() {
                       <div style={{ fontSize: 12, lineHeight: 1.8, color: '#666' }}>
                         <strong>① 加权日均</strong> = Σ(各月日均 × 权重) / Σ权重，权重 [6,5,4,3,2,1]<br />
                         <strong>② 周转天数</strong> = 当前库存 ÷ 加权日均<br />
-                        <strong>③ 安全系数</strong> = 周转&lt;60天 → 1.7x；周转≥60天 → 1.3x<br />
-                        <strong>④ 安全库存</strong> = 加权日均 × 60天 × 安全系数<br />
-                        <strong>⑤ 补货量</strong> = max(安全库存 + 周期需求 - 有效库存, 周期需求)<br />
-                        <strong>⑥ 优先级</strong> = 供应&lt;7天→紧急；&lt;60天→常规；否则→计划
+                        <strong>③ 再订货点</strong> = 交期需求 + 安全库存<br />
+                        <strong>④ 目标库存</strong> = 加权日均 ×（交期 + 复查周期 + 安全天数），受库存上限约束<br />
+                        <strong>⑤ 补货量</strong> = max(0, 目标库存 - 有效库存)，再按起订量及整箱倍数取整<br />
+                        <strong>⑥ 优先级</strong> = 供应&lt;7天→紧急；低于SKU交期→常规；否则→计划
                       </div>
                     </Card>
                   </Col>
@@ -1306,13 +1307,13 @@ export default function Inventory() {
                     <Select
                       mode="multiple"
                       allowClear
-                      placeholder="安全系数"
+                      placeholder="安全天数"
                       style={{ minWidth: 130 }}
                       value={reorderSafetyFilter}
                       onChange={setReorderSafetyFilter}
                       options={[
-                        { label: '1.7x（快消）', value: '1.7' },
-                        { label: '1.3x（慢消）', value: '1.3' },
+                        { label: '30天（默认快消）', value: '30' },
+                        { label: '15天（默认慢消）', value: '15' },
                       ]}
                       maxTagCount="responsive"
                       popupMatchSelectWidth={false}

@@ -3,7 +3,7 @@ Inventory routes - 库存分析接口.
 包含：库存健康、周转分析、滞销分析、补货建议、资金占用.
 Dashboard: 企业健康指数 + CEO日报.
 支持按月份筛选（month 参数，格式 YYYY-MM，用于 sales_summary 数据过滤）。
-补货建议使用 reorder_service 统一引擎（近6个月加权日均 + 2个月采购周期 + 动态安全系数）。
+补货建议使用 reorder_service 统一引擎（近6个完整月份加权日均 + SKU订货策略）。
 """
 
 from fastapi import APIRouter, Depends, Query
@@ -273,9 +273,9 @@ def inventory_analysis(
 
     使用 reorder_service 统一引擎计算：
     - 近6个月加权日均销量（权重 6/5/4/3/2/1）
-    - 采购周期 60 天（2个月）
-    - 动态安全系数：周转<2个月→1.7，周转≥2个月→1.3
-    - 补货量 = max(安全库存 + 周期需求 - 有效库存, 周期需求)
+    - 默认交期60天、复查周期30天，支持SKU覆盖
+    - 默认安全天数：快消30天、慢消15天
+    - 补货量 = 目标库存 - 有效库存，再按起订量和订货倍数取整
     """
     period = resolve_period(db, month)
 

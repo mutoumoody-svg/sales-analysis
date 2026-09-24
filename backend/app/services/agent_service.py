@@ -555,9 +555,9 @@ class ProcurementAgent(BaseAgent):
     """采购建议Agent: 补货建议、采购优先级、采购量.
 
     使用 reorder_service 统一引擎：
-    - 近4个月加权日均销量（权重 4/3/2/1）
-    - 采购周期 60 天（2个月）
-    - 动态安全系数：周转<2个月→1.7，周转≥2个月→1.3
+    - 近6个完整月份加权日均销量（权重 6/5/4/3/2/1）
+    - 默认交期60天、复查周期30天，可按SKU覆盖
+    - 默认安全天数：快消30天、慢消15天
     """
 
     agent_type = "Procurement Agent"
@@ -648,7 +648,7 @@ class ProcurementAgent(BaseAgent):
         total_value = total_urgent_value + total_normal_value
         if total_value > 0:
             recommendations.append({
-                "recommendation": f"采购预算建议：¥{total_value:,.0f}（紧急 ¥{total_urgent_value:,.0f} + 常规 ¥{total_normal_value:,.0f}），基于近4个月加权日均销量计算，采购周期60天",
+                "recommendation": f"采购预算建议：¥{total_value:,.0f}（紧急 ¥{total_urgent_value:,.0f} + 常规 ¥{total_normal_value:,.0f}），基于近6个完整月份加权日均销量及SKU订货策略计算",
                 "priority": "Medium",
                 "target_type": "overall",
             })

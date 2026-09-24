@@ -20,6 +20,11 @@ interface PurchasePlan {
   id: string; sku: string; product_name: string; suggested_qty: number; confirmed_qty?: number;
   unit_cost?: number; status: string; priority: string; notes?: string; expected_date?: string;
 }
+interface ReorderPolicy {
+  id: string; product_id: string; sku: string; product_name: string;
+  lead_time_days: number; review_period_days: number; safety_days?: number;
+  min_order_qty: number; order_multiple: number; max_stock_days: number; active: boolean;
+}
 interface DailyAlert { id: string; agent_type: string; priority: string; recommendation: string; created_at: string }
 interface ProductOption { id: string; sku: string; product_name: string }
 interface StoreOption { id: string; store_name: string; channel?: string }
@@ -36,22 +41,25 @@ export default function Operations() {
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
   const [costs, setCosts] = useState<CostRecord[]>([]);
   const [plans, setPlans] = useState<PurchasePlan[]>([]);
+  const [policies, setPolicies] = useState<ReorderPolicy[]>([]);
   const [alerts, setAlerts] = useState<DailyAlert[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [costOpen, setCostOpen] = useState(false);
   const [confirmPlan, setConfirmPlan] = useState<PurchasePlan | null>(null);
+  const [policyOpen, setPolicyOpen] = useState(false);
   const [costForm] = Form.useForm();
   const [planForm] = Form.useForm();
+  const [policyForm] = Form.useForm();
   const [adminKey, setAdminKey] = useState(() => sessionStorage.getItem('admin_api_key') || '');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [q, c, p, a, i] = await Promise.all([
-        operationsApi.quality(), operationsApi.costs(), operationsApi.purchasePlans(), operationsApi.dailyAlerts(), operationsApi.integrationStatus(),
+      const [q, c, p, a, i, rp] = await Promise.all([
+        operationsApi.quality(), operationsApi.costs(), operationsApi.purchasePlans(), operationsApi.dailyAlerts(), operationsApi.integrationStatus(), operationsApi.reorderPolicies(),
       ]);
-      setQuality(q.data.data); setCosts(c.data.data); setPlans(p.data.data); setAlerts(a.data.data); setIntegration(i.data.data);
+      setQuality(q.data.data); setCosts(c.data.data); setPlans(p.data.data); setAlerts(a.data.data); setIntegration(i.data.data); setPolicies(rp.data.data);
     } catch (error) {
       message.error(`运营数据加载失败：${error instanceof Error ? error.message : '未知错误'}`);
     } finally { setLoading(false); }
@@ -97,6 +105,12 @@ export default function Operations() {
     message.success('采购数量已确认'); setConfirmPlan(null); planForm.resetFields(); await load();
   };
 
+  const savePolicy = async () => {
+    const values = await policyForm.validateFields();
+    await operationsApi.saveReorderPolicy(values);
+    message.success('SKU订货策略已保存'); setPolicyOpen(false); policyForm.resetFields(); await load();
+  };
+
   const issueCards = quality?.issues || [];
   const costColumns = useMemo(() => [
     { title: 'SKU', dataIndex: 'sku', width: 140 },
@@ -116,6 +130,18 @@ export default function Operations() {
     { title: '操作', render: (_: unknown, r: PurchasePlan) => <Button size="small" icon={<CheckOutlined />} disabled={r.status !== 'draft'} onClick={() => { setConfirmPlan(r); planForm.setFieldsValue({ confirmed_qty: r.suggested_qty, confirmed_by: '管理员' }); }}>确认</Button> },
   ], [planForm]);
 
+  const policyColumns = useMemo(() => [
+    { title: 'SKU', dataIndex: 'sku', width: 140 },
+    { title: '商品', dataIndex: 'product_name', ellipsis: true },
+    { title: '交期', dataIndex: 'lead_time_days', render: (v: number) => `${v}天` },
+    { title: '复查周期', dataIndex: 'review_period_days', render: (v: number) => `${v}天` },
+    { title: '安全天数', dataIndex: 'safety_days', render: (v?: number) => v == null ? '自动' : `${v}天` },
+    { title: '起订量', dataIndex: 'min_order_qty' },
+    { title: '订货倍数', dataIndex: 'order_multiple' },
+    { title: '库存上限', dataIndex: 'max_stock_days', render: (v: number) => `${v}天` },
+    { title: '', width: 56, render: (_: unknown, r: ReorderPolicy) => <Popconfirm title="删除此SKU策略并恢复默认参数？" onConfirm={async () => { await operationsApi.deleteReorderPolicy(r.id); await load(); }}><Button danger type="text" icon={<DeleteOutlined />} /></Popconfirm> },
+  ], [load]);
+
   return <div style={{ padding: 24 }}>
     <Title level={3}>运营设置与数据治理</Title>
     <Alert showIcon type="info" message="写操作需要管理员密钥。密钥只保存在当前浏览器会话，不会写入前端代码。" action={<Space><Input.Password prefix={<KeyOutlined />} value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="X-Admin-Key" /><Button onClick={saveKey}>保存</Button></Space>} />
@@ -131,6 +157,7 @@ export default function Operations() {
         </Card></> },
       { key: 'cost', label: '成本维护', children: <Card extra={<Space><Button type="primary" onClick={() => setCostOpen(true)}>新增成本</Button><Button icon={<SyncOutlined />} onClick={recalculate}>重算当前月份</Button></Space>}><Table rowKey="id" loading={loading} dataSource={costs} columns={costColumns} /></Card> },
       { key: 'purchase', label: '采购清单', children: <Card extra={<Button type="primary" onClick={generatePlans}>生成/更新采购草案</Button>}><Table rowKey="id" loading={loading} dataSource={plans} columns={planColumns} /></Card> },
+      { key: 'reorder-policy', label: '订货策略', children: <Card extra={<Button type="primary" onClick={() => setPolicyOpen(true)}>新增SKU策略</Button>}><Alert showIcon type="info" message="未单独设置的SKU使用默认参数：交期60天、复查30天、快消安全30天、慢消安全15天、库存上限180天。" style={{ marginBottom: 12 }} /><Table rowKey="id" loading={loading} dataSource={policies} columns={policyColumns} /></Card> },
       { key: 'alerts', label: '日报预警', children: <Card><Table rowKey="id" dataSource={alerts} columns={[{ title: '时间', dataIndex: 'created_at', render: (v) => dayjs(v).format('MM-DD HH:mm') }, { title: 'Agent', dataIndex: 'agent_type' }, { title: '优先级', dataIndex: 'priority', render: (v) => <Tag>{v}</Tag> }, { title: '建议', dataIndex: 'recommendation' }]} /></Card> },
     ]} />
 
@@ -145,6 +172,14 @@ export default function Operations() {
     <Modal title={`确认采购：${confirmPlan?.sku || ''}`} open={!!confirmPlan} onCancel={() => setConfirmPlan(null)} onOk={submitPlan}>
       <Form form={planForm} layout="vertical"><Form.Item name="confirmed_qty" label="确认数量" rules={[{ required: true }]}><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item><Form.Item name="confirmed_by" label="确认人" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="expected_date" label="预计到货"><DatePicker style={{ width: '100%' }} /></Form.Item><Form.Item name="notes" label="备注"><Input.TextArea /></Form.Item></Form>
       <Text type="secondary">建议数量：{confirmPlan?.suggested_qty || 0}</Text>
+    </Modal>
+    <Modal title="新增或更新SKU订货策略" open={policyOpen} onCancel={() => setPolicyOpen(false)} onOk={savePolicy} destroyOnHidden>
+      <Form form={policyForm} layout="vertical" initialValues={{ lead_time_days: 60, review_period_days: 30, min_order_qty: 1, order_multiple: 1, max_stock_days: 180, active: true }}>
+        <Form.Item name="product_id" label="商品" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={products.map((p) => ({ value: p.id, label: `${p.sku} ${p.product_name}` }))} /></Form.Item>
+        <Row gutter={12}><Col span={12}><Form.Item name="lead_time_days" label="采购交期（天）" rules={[{ required: true }]}><InputNumber min={1} max={365} style={{ width: '100%' }} /></Form.Item></Col><Col span={12}><Form.Item name="review_period_days" label="复查周期（天）" rules={[{ required: true }]}><InputNumber min={0} max={180} style={{ width: '100%' }} /></Form.Item></Col></Row>
+        <Row gutter={12}><Col span={12}><Form.Item name="safety_days" label="安全天数（留空自动）"><InputNumber min={0} max={180} style={{ width: '100%' }} /></Form.Item></Col><Col span={12}><Form.Item name="max_stock_days" label="最高库存天数" rules={[{ required: true }]}><InputNumber min={1} max={730} style={{ width: '100%' }} /></Form.Item></Col></Row>
+        <Row gutter={12}><Col span={12}><Form.Item name="min_order_qty" label="最小起订量" rules={[{ required: true }]}><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col><Col span={12}><Form.Item name="order_multiple" label="整箱/订货倍数" rules={[{ required: true }]}><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col></Row>
+      </Form>
     </Modal>
   </div>;
 }

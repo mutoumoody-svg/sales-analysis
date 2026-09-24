@@ -146,6 +146,9 @@ export const operationsApi = {
   purchasePlans: (params?: Record<string, unknown>) => api.get('/operations/purchase-plans', { params }),
   generatePurchasePlans: (params?: Record<string, unknown>) => api.post('/operations/purchase-plans/generate', null, { params, timeout: 120000 }),
   updatePurchasePlan: (id: string, data: Record<string, unknown>) => api.patch(`/operations/purchase-plans/${id}`, data),
+  reorderPolicies: () => api.get('/operations/reorder-policies'),
+  saveReorderPolicy: (data: Record<string, unknown>) => api.post('/operations/reorder-policies', data),
+  deleteReorderPolicy: (id: string) => api.delete(`/operations/reorder-policies/${id}`),
   dailyAlerts: () => api.get('/operations/daily-alerts'),
   updateProduct: (id: string, data: Record<string, unknown>) => api.patch(`/operations/products/${id}`, data),
 };

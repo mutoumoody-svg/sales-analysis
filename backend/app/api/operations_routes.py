@@ -19,6 +19,7 @@ from app.models.inventory import Inventory
 from app.models.monthly_accounting import MonthlyAccountingBatch
 from app.models.product import Product
 from app.models.purchase_plan import PurchasePlan
+from app.models.reorder_policy import ReorderPolicy
 from app.models.sales_summary import SalesSummary
 from app.models.sku_cost import SkuCost
 from app.models.store import Store
@@ -72,6 +73,66 @@ class ProductMasterUpdate(BaseModel):
     category: str | None = Field(default=None, max_length=100)
     unit_cost: Decimal | None = Field(default=None, ge=0)
     status: Literal["active", "discontinued"] | None = None
+
+
+class ReorderPolicyUpsert(BaseModel):
+    product_id: UUID
+    lead_time_days: int = Field(default=60, ge=1, le=365)
+    review_period_days: int = Field(default=30, ge=0, le=180)
+    safety_days: int | None = Field(default=None, ge=0, le=180)
+    min_order_qty: int = Field(default=1, ge=1)
+    order_multiple: int = Field(default=1, ge=1)
+    max_stock_days: int = Field(default=180, ge=1, le=730)
+    active: bool = True
+
+
+@router.get("/operations/reorder-policies")
+def list_reorder_policies(db: Session = Depends(get_db)):
+    rows = (
+        db.query(ReorderPolicy, Product)
+        .join(Product, ReorderPolicy.product_id == Product.id)
+        .order_by(Product.sku)
+        .all()
+    )
+    return {"status": "success", "data": [{
+        "id": str(policy.id),
+        "product_id": str(policy.product_id),
+        "sku": product.sku,
+        "product_name": product.product_name,
+        "lead_time_days": policy.lead_time_days,
+        "review_period_days": policy.review_period_days,
+        "safety_days": policy.safety_days,
+        "min_order_qty": policy.min_order_qty,
+        "order_multiple": policy.order_multiple,
+        "max_stock_days": policy.max_stock_days,
+        "active": policy.active,
+    } for policy, product in rows]}
+
+
+@router.post("/operations/reorder-policies", dependencies=[Depends(require_admin)])
+def upsert_reorder_policy(payload: ReorderPolicyUpsert, db: Session = Depends(get_db)):
+    product = db.get(Product, payload.product_id)
+    if not product:
+        raise HTTPException(404, "Product not found")
+    policy = db.query(ReorderPolicy).filter(ReorderPolicy.product_id == payload.product_id).first()
+    if not policy:
+        policy = ReorderPolicy(product_id=payload.product_id)
+    for field, value in payload.model_dump(exclude={"product_id"}).items():
+        setattr(policy, field, value)
+    db.add(policy)
+    db.commit()
+    db.refresh(policy)
+    return {"status": "success", "data": {"id": str(policy.id)}}
+
+
+@router.delete("/operations/reorder-policies/{policy_id}", dependencies=[Depends(require_admin)])
+def delete_reorder_policy(policy_id: UUID, db: Session = Depends(get_db)):
+    policy = db.get(ReorderPolicy, policy_id)
+    if not policy:
+        raise HTTPException(404, "Reorder policy not found")
+    db.delete(policy)
+    db.commit()
+    return {"status": "success"}
 
 
 @router.patch("/operations/products/{product_id}", dependencies=[Depends(require_admin)])
