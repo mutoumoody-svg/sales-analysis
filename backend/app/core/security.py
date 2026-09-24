@@ -7,12 +7,20 @@ from fastapi import Header, HTTPException, status
 from app.core.config import settings
 
 
-def require_admin(x_admin_key: str | None = Header(default=None)) -> None:
-    """Require X-Admin-Key when an admin key is configured.
+def require_admin(
+    x_admin_key: str | None = Header(default=None),
+    x_authenticated_user: str | None = Header(default=None),
+) -> None:
+    """Require an API key or a user authenticated by the reverse proxy.
 
-    Development remains usable before a key is configured. Production fails
-    closed so imports and external sync cannot be exposed accidentally.
+    Nginx must overwrite ``X-Authenticated-User`` with ``$remote_user`` after
+    successful HTTP Basic authentication. Direct API clients can continue to
+    use ``X-Admin-Key``. Development remains usable before a key is configured;
+    production otherwise fails closed.
     """
+    if x_authenticated_user and x_authenticated_user.strip():
+        return
+
     expected = settings.ADMIN_API_KEY.strip()
     if not expected:
         if settings.ENVIRONMENT.lower() in {"development", "test"}:
